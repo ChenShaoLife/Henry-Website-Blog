@@ -1,0 +1,186 @@
+---
+import { getCollection } from 'astro:content';
+import { strings, type Lang } from '../i18n/strings';
+
+interface Props { lang: Lang; tagFilter?: string; }
+const { lang, tagFilter } = Astro.props;
+const t = strings[lang];
+
+const isProd = !import.meta.env.DEV;
+const collectionName = lang === 'zh' ? 'blogZh' : 'blogEn';
+const all = await getCollection(collectionName, ({ data }) => !isProd || !data.draft);
+
+let posts = all;
+if (lang === 'en') {
+  const zhAll = await getCollection('blogZh', ({ data }) => !isProd || !data.draft);
+  const zhSlugs = new Set(zhAll.map((p) => p.id));
+  posts = all.filter((p) => zhSlugs.has(p.id));
+}
+
+if (tagFilter) {
+  posts = posts.filter((p) => p.data.tags.includes(tagFilter));
+}
+
+posts.sort((a, b) => b.data.pubDate.getTime() - a.data.pubDate.getTime());
+
+const fallbackColors = ['#FF6EB4', '#5B9CF6', '#FFE500', '#4ADE80'];
+const urlBase = lang === 'en' ? '/blog' : '/zh/blog';
+
+const heading = tagFilter ? tagFilter : t.blog.listTitle;
+const eyebrow = tagFilter ? `${t.blog.tagPagePrefix} ·` : t.blog.listEyebrow;
+---
+<section class="bl-wrap">
+  <header class="bl-head">
+    <p class="bl-eyebrow">{eyebrow}</p>
+    <h1 class="bl-title">{heading}</h1>
+    {tagFilter && <a class="bl-back" href={urlBase}>{t.blog.backToBlog}</a>}
+  </header>
+
+  {posts.length === 0 ? (
+    <p class="bl-empty">{t.blog.empty}</p>
+  ) : (
+    <div class="bl-grid">
+      {posts.map((p, i) => {
+        const dateLabel = p.data.pubDate.toLocaleDateString(lang === 'zh' ? 'zh-CN' : 'en-US', {
+          year: 'numeric', month: 'long', day: 'numeric',
+        });
+        const bg = fallbackColors[i % fallbackColors.length];
+        return (
+          <article class="bl-card">
+            <a class="bl-card-link" href={`${urlBase}/${p.id}`}>
+              <div class="bl-thumb" style={p.data.cover ? '' : `background: ${bg}`}>
+                {p.data.cover && <img src={p.data.cover} alt={p.data.title} loading="lazy" />}
+              </div>
+              <div class="bl-body">
+                <h2 class="bl-h">{p.data.title}</h2>
+                <p class="bl-desc">{p.data.description}</p>
+              </div>
+            </a>
+            <div class="bl-footer">
+              <div class="bl-tags">
+                {p.data.tags.slice(0, 3).map((tag) => (
+                  <a class="bl-tag" href={`${urlBase}/tag/${encodeURIComponent(tag)}`}>{tag}</a>
+                ))}
+              </div>
+              <div class="bl-footer-r">
+                <time class="bl-date" datetime={p.data.pubDate.toISOString()}>{dateLabel}</time>
+                <a class="bl-cta" href={`${urlBase}/${p.id}`}>{t.blog.readMore}</a>
+              </div>
+            </div>
+          </article>
+        );
+      })}
+    </div>
+  )}
+</section>
+
+<style>
+  .bl-wrap {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 140px 24px 80px;
+  }
+  .bl-head { margin-bottom: 48px; }
+  .bl-eyebrow {
+    font-size: 11px; font-weight: 700;
+    letter-spacing: .15em; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 14px;
+  }
+  .bl-title {
+    font-family: var(--fh);
+    font-size: clamp(48px, 6vw, 76px);
+    font-weight: 800; letter-spacing: -0.03em; line-height: 1;
+  }
+  .bl-back {
+    display: inline-block; margin-top: 16px;
+    font-family: var(--fh); font-size: 13px; font-weight: 700;
+    padding: 6px 14px; border-radius: 999px;
+    border: 1.5px solid var(--text); background: var(--surface);
+    box-shadow: 2px 2px 0 var(--text);
+    transition: transform .15s, box-shadow .15s;
+  }
+  .bl-back:hover { transform: translate(-1px,-1px); box-shadow: 3px 3px 0 var(--text); }
+  .bl-empty {
+    padding: 64px 24px; text-align: center;
+    color: var(--muted); font-size: 16px;
+    border: 2px dashed #0A0A0A; border-radius: 16px;
+  }
+  .bl-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 24px;
+  }
+  .bl-card {
+    background: var(--surface);
+    border: var(--bd); border-radius: var(--rc);
+    box-shadow: var(--sh);
+    overflow: hidden;
+    display: flex; flex-direction: column;
+    transition: transform .2s var(--ease), box-shadow .2s var(--ease);
+  }
+  .bl-card:hover { transform: translate(-3px, -3px); box-shadow: var(--sh-lg); }
+  .bl-card-link {
+    display: flex; flex-direction: column; flex: 1;
+    text-decoration: none; color: inherit;
+  }
+  .bl-thumb {
+    aspect-ratio: 16 / 9;
+    background: var(--bg);
+    border-bottom: 2px solid var(--text);
+    overflow: hidden;
+  }
+  .bl-thumb img {
+    width: 100%; height: 100%; object-fit: cover;
+    transition: transform .3s var(--ease);
+  }
+  .bl-card:hover .bl-thumb img { transform: scale(1.04); }
+  .bl-body {
+    padding: 18px 22px 12px;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .bl-h {
+    font-family: var(--fh);
+    font-size: 20px; font-weight: 800;
+    letter-spacing: -0.02em; line-height: 1.3;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .bl-desc {
+    font-size: 13px; color: var(--muted); line-height: 1.55;
+    display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2;
+    -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .bl-footer {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 8px; flex-wrap: wrap;
+    padding: 10px 22px 14px;
+    border-top: 1.5px dashed #DDD;
+  }
+  .bl-tags { display: flex; flex-wrap: wrap; gap: 5px; }
+  .bl-tag {
+    padding: 2px 9px;
+    border: 1.5px solid var(--text); border-radius: 999px;
+    background: var(--blue); color: #fff;
+    font-family: var(--fh); font-size: 10px; font-weight: 700;
+    letter-spacing: .06em; text-decoration: none;
+    transition: transform .12s;
+  }
+  .bl-tag:hover { transform: translate(-1px,-1px); box-shadow: 2px 2px 0 var(--text); }
+  .bl-footer-r { display: flex; align-items: center; gap: 10px; margin-left: auto; }
+  .bl-date {
+    font-family: var(--fh); font-size: 11px; font-weight: 600;
+    color: var(--muted); letter-spacing: .04em; white-space: nowrap;
+  }
+  .bl-cta {
+    font-family: var(--fh); font-size: 12px; font-weight: 700;
+    padding: 5px 14px; border-radius: 999px;
+    border: 1.5px solid var(--text); background: var(--text); color: #fff;
+    box-shadow: 2px 2px 0 var(--text); text-decoration: none; white-space: nowrap;
+    transition: transform .12s, box-shadow .12s;
+  }
+  .bl-cta:hover { transform: translate(-1px,-1px); box-shadow: 3px 3px 0 var(--text); }
+
+  @media (max-width: 600px) {
+    .bl-wrap { padding: 100px 12px 60px; }
+    .bl-grid { grid-template-columns: 1fr; }
+  }
+</style>
