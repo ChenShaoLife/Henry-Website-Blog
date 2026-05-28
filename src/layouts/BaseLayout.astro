@@ -1,0 +1,148 @@
+---
+import '../styles/global.css';
+import { strings, type Lang } from '../i18n/strings';
+import Nav from '../components/Nav.astro';
+import Footer from '../components/Footer.astro';
+
+interface Props {
+  lang: Lang;
+  langHref?: string;
+  pageTitle?: string;
+  pageDescription?: string;
+  pageImage?: string;
+  pageType?: 'website' | 'article';
+  pubDate?: Date;
+}
+const { lang, langHref, pageTitle, pageDescription, pageImage, pageType = 'website', pubDate } = Astro.props;
+const t = strings[lang];
+const htmlLang = lang === 'zh' ? 'zh-CN' : 'en';
+const site = Astro.site ?? 'https://henry-website-seven.vercel.app';
+const metaTitle       = pageTitle       ? `${pageTitle} — Henry`             : t.meta.title;
+const metaDescription = pageDescription ?? t.meta.ogDescription;
+const metaImage       = pageImage       ? new URL(pageImage, site).href       : new URL(t.meta.ogImage, site).href;
+const metaUrl         = new URL(Astro.url.pathname, site).href;
+---
+<!DOCTYPE html>
+<html lang={htmlLang}>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{metaTitle}</title>
+  <meta name="description" content={metaDescription} />
+  <link rel="canonical" href={metaUrl} />
+
+  <meta property="og:type"        content={pageType} />
+  <meta property="og:title"       content={metaTitle} />
+  <meta property="og:description" content={metaDescription} />
+  <meta property="og:image"       content={metaImage} />
+  <meta property="og:url"         content={metaUrl} />
+  {pageType === 'article' && pubDate && (
+    <meta property="article:published_time" content={pubDate.toISOString()} />
+  )}
+
+  <meta name="twitter:card"        content="summary_large_image" />
+  <meta name="twitter:title"       content={metaTitle} />
+  <meta name="twitter:description" content={metaDescription} />
+  <meta name="twitter:image"       content={metaImage} />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <Nav lang={lang} langHref={langHref} />
+  <main class="page-main"><slot /></main>
+  <Footer lang={lang} />
+
+  <script>
+    const sections = [...document.querySelectorAll('section[id]')] as HTMLElement[];
+    const navLinks = [...document.querySelectorAll('.nav-link')] as HTMLAnchorElement[];
+    function updateNav() {
+      if (!sections.length) return;
+      let cur = sections[0].id;
+      sections.forEach(s => { if (window.scrollY >= s.offsetTop - 140) cur = s.id; });
+      navLinks.forEach(l => {
+        const href = l.getAttribute('href') || '';
+        if (href.includes('#')) l.classList.toggle('active', href.endsWith('#' + cur));
+      });
+    }
+    window.addEventListener('scroll', updateNav, { passive: true });
+    updateNav();
+
+    const rvObs = new IntersectionObserver(entries => {
+      entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('vis'); rvObs.unobserve(e.target); } });
+    }, { threshold: 0.1 });
+    document.querySelectorAll('.rv').forEach(el => rvObs.observe(el));
+
+    function initScrollSection(scrollId: string, prevId: string, nextId: string, speed: number) {
+      const el = document.getElementById(scrollId);
+      if (!el) return;
+
+      const step = () => el.offsetWidth * 0.75;
+      const prevBtn = document.getElementById(prevId);
+      const nextBtn = document.getElementById(nextId);
+
+      let rafId: number | null = null;
+      let dir = 1;
+      let hovering = false;
+      let busy = false;
+      let busyTimer: ReturnType<typeof setTimeout> | null = null;
+
+      const setBusy = (ms: number) => {
+        busy = true;
+        if (busyTimer) clearTimeout(busyTimer);
+        if (ms < Infinity) busyTimer = setTimeout(() => { busy = false; }, ms);
+      };
+
+      if (prevBtn) prevBtn.addEventListener('click', () => {
+        el.scrollBy({ left: -step(), behavior: 'smooth' });
+        setBusy(1800);
+      });
+      if (nextBtn) nextBtn.addEventListener('click', () => {
+        el.scrollBy({ left: step(), behavior: 'smooth' });
+        setBusy(1800);
+      });
+
+      el.addEventListener('mouseenter', () => { hovering = true; });
+      el.addEventListener('mouseleave', () => { hovering = false; });
+      el.addEventListener('wheel',      () => setBusy(2500), { passive: true });
+      el.addEventListener('touchstart', () => { busy = true; if (busyTimer) clearTimeout(busyTimer); }, { passive: true });
+      el.addEventListener('touchend',   () => setBusy(3000));
+
+      function tick() {
+        if (!el) return;
+        if (!hovering && !busy) {
+          const max = el.scrollWidth - el.clientWidth;
+          if (max > 0) {
+            if (el.scrollLeft >= max - 1) dir = -1;
+            if (el.scrollLeft <= 0)       dir =  1;
+            el.scrollLeft += speed * dir;
+          }
+        }
+        rafId = requestAnimationFrame(tick);
+      }
+
+      const section = el.closest('section');
+      new IntersectionObserver(entries => {
+        entries.forEach(e => {
+          if (e.isIntersecting) {
+            rafId = rafId || requestAnimationFrame(tick);
+          } else {
+            if (rafId) cancelAnimationFrame(rafId);
+            rafId = null;
+          }
+        });
+      }, { threshold: 0.2 }).observe(section || el);
+    }
+
+    initScrollSection('videos-scroll',   'videos-prev',   'videos-next',   0.5);
+    initScrollSection('projects-scroll', 'projects-prev', 'projects-next', 0.35);
+
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      document.querySelectorAll('.rv').forEach(el => el.classList.add('vis'));
+      const mq = document.querySelector('.mq-track') as HTMLElement | null;
+      if (mq) mq.style.animation = 'none';
+    }
+  </script>
+</body>
+</html>
