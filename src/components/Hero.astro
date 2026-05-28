@@ -1,0 +1,43 @@
+---
+import { strings, type Lang } from '../i18n/strings';
+interface Props { lang: Lang; }
+const { lang } = Astro.props;
+const t = strings[lang];
+const badgeColors = ['b-pink', 'b-blue', 'b-yellow', 'b-green', ''];
+const badgeRots   = ['-6deg', '4deg', '-3deg', '7deg', '-5deg'];
+---
+<section id="hero">
+  <div class="wrap">
+    <div class="hero-card">
+      <div class="hero-content">
+        <div class="hero-tags">
+          <span class="hero-tag">{t.hero.tagEditor}</span>
+          <span class="hero-tag">{t.hero.tagCoder}</span>
+        </div>
+        <h1 class="hero-h1">
+          <span>{t.hero.greeting}</span><br>
+          <span class="hl hl-b"><span class="hl-text">Henry</span></span>
+        </h1>
+        <div class="hero-btns">
+          <a href="#videos"  class="btn btn-dark">{t.hero.btnWorks}</a>
+          <a href="#contact" class="btn btn-light">{t.hero.btnContact}</a>
+        </div>
+      </div>
+
+      <div class="hero-mid">
+        {t.hero.badges.map((label, i) => (
+          <span class={`h-badge ${badgeColors[i]}`} style={`--rot: ${badgeRots[i]}`}>{label}</span>
+        ))}
+      </div>
+
+      <div class="avatar-box">
+        <img src="/images/avatar3.png" alt={t.hero.avatarAlt}
+             onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+        <div class="ph" style="display:none">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+          {t.hero.avatarFallback}
+        </div>
+      </div>
+    </div>
+  </div>
+</section>

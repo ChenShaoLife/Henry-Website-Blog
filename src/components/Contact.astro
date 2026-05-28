@@ -1,0 +1,20 @@
+---
+import { strings, socials, email, type Lang } from '../i18n/strings';
+interface Props { lang: Lang; }
+const { lang } = Astro.props;
+const t = strings[lang];
+---
+<section id="contact">
+  <div class="wrap">
+    <div class="contact-box rv">
+      <p class="contact-ey">{t.contact.eyebrow}</p>
+      <h2 class="contact-h" set:html={t.contact.headingHtml}></h2>
+      <a href={`mailto:${email}`} class="email-btn">{email}</a>
+      <nav class="socials" aria-label={t.contact.socialsAria}>
+        {socials.map((s) => (
+          <a href={s.url} class="social-btn">{s.label}</a>
+        ))}
+      </nav>
+    </div>
+  </div>
+</section>

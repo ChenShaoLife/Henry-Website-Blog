@@ -1,0 +1,112 @@
+---
+import { getCollection } from 'astro:content';
+import { strings, type Lang } from '../i18n/strings';
+
+interface Props { lang: Lang; }
+const { lang } = Astro.props;
+const t = strings[lang];
+
+const isProd = !import.meta.env.DEV;
+const collectionName = lang === 'zh' ? 'blogZh' : 'blogEn';
+const all = await getCollection(collectionName, ({ data }) => !isProd || !data.draft).catch(() => []);
+
+let posts = all;
+if (lang === 'en') {
+  const zhAll = await getCollection('blogZh', ({ data }) => !isProd || !data.draft).catch(() => []);
+  const zhSlugs = new Set(zhAll.map((p) => p.id));
+  posts = all.filter((p) => zhSlugs.has(p.id));
+}
+posts.sort((a, b) => b.data.pubDate.getTime() - a.data.pubDate.getTime());
+const latest = posts.slice(0, 3);
+
+const urlBase = lang === 'en' ? '/blog' : '/zh/blog';
+const fallbackColors = ['#FF6EB4', '#5B9CF6', '#FFE500', '#4ADE80'];
+---
+{latest.length > 0 && (
+  <section id="latest" class="section">
+    <div class="wrap">
+      <div class="sec-row rv">
+        <h2 class="sec-h">{t.blog.latestTitle.split(' ')[0]} <span class="hl hl-y">{t.blog.latestTitle.split(' ').slice(1).join(' ') || t.blog.latestEyebrow}</span></h2>
+        <a href={urlBase} class="btn-outline">{t.blog.seeAll}</a>
+      </div>
+      <div class="la-grid rv d1">
+        {latest.map((p, i) => {
+          const dateLabel = p.data.pubDate.toLocaleDateString(lang === 'zh' ? 'zh-CN' : 'en-US', {
+            year: 'numeric', month: 'long', day: 'numeric',
+          });
+          const bg = fallbackColors[i % fallbackColors.length];
+          return (
+            <a class="la-card card" href={`${urlBase}/${p.id}`}>
+              <div class="la-thumb" style={p.data.cover ? '' : `background: ${bg}`}>
+                {p.data.cover && <img src={p.data.cover} alt={p.data.title} loading="lazy" />}
+              </div>
+              <div class="la-body">
+                <div class="la-meta">
+                  <time>{dateLabel}</time>
+                  {p.data.tags.slice(0, 2).map((tag) => <span class="la-tag">{tag}</span>)}
+                </div>
+                <h3 class="la-h">{p.data.title}</h3>
+                <p class="la-desc">{p.data.description}</p>
+              </div>
+            </a>
+          );
+        })}
+      </div>
+    </div>
+  </section>
+)}
+
+<style>
+  .la-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+  }
+  .la-card {
+    display: flex; flex-direction: column;
+    text-decoration: none; color: inherit;
+  }
+  .la-thumb {
+    aspect-ratio: 16 / 9;
+    background: var(--bg);
+    border-bottom: 2px solid var(--text);
+    overflow: hidden;
+  }
+  .la-thumb img {
+    width: 100%; height: 100%; object-fit: cover;
+    transition: transform .3s var(--ease);
+  }
+  .la-card:hover .la-thumb img { transform: scale(1.04); }
+  .la-body {
+    padding: 18px 20px 22px;
+    display: flex; flex-direction: column; gap: 10px;
+    flex: 1;
+  }
+  .la-meta {
+    display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+    font-family: var(--fh); font-size: 11px; font-weight: 700;
+    color: var(--muted); letter-spacing: .06em; text-transform: uppercase;
+  }
+  .la-tag {
+    padding: 2px 8px;
+    border: 1.5px solid var(--text); border-radius: 999px;
+    background: var(--blue); color: #fff;
+    font-size: 10px;
+  }
+  .la-h {
+    font-family: var(--fh);
+    font-size: 20px; font-weight: 800;
+    letter-spacing: -.02em; line-height: 1.25;
+  }
+  .la-desc {
+    font-size: 14px; color: var(--muted); line-height: 1.55;
+    display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2;
+    -webkit-box-orient: vertical; overflow: hidden;
+  }
+  @media (max-width: 960px) {
+    .la-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 600px) {
+    .la-grid { grid-template-columns: 1fr; }
+  }
+</style>

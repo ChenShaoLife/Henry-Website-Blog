@@ -1,0 +1,12 @@
+---
+import { marqueeBrands } from '../i18n/strings';
+const reps = 4;
+const items = Array.from({ length: reps }, () => marqueeBrands).flat();
+---
+<div class="mq-outer" aria-hidden="true">
+  <div class="mq-track">
+    {items.map((brand) => (
+      <span class="mq-item">{brand}<span class="mq-dot"></span></span>
+    ))}
+  </div>
+</div>

@@ -1,0 +1,54 @@
+---
+import { strings, type Lang } from '../i18n/strings';
+
+interface Props { lang: Lang; }
+const { lang } = Astro.props;
+const t = strings[lang];
+
+const repo = import.meta.env.PUBLIC_GISCUS_REPO;
+const repoId = import.meta.env.PUBLIC_GISCUS_REPO_ID;
+const category = import.meta.env.PUBLIC_GISCUS_CATEGORY;
+const categoryId = import.meta.env.PUBLIC_GISCUS_CATEGORY_ID;
+const enabled = !!(repo && repoId && category && categoryId);
+const giscusLang = lang === 'zh' ? 'zh-CN' : 'en';
+---
+{enabled && (
+  <section class="gc-wrap" aria-label={t.blog.comments}>
+    <h3 class="gc-h">{t.blog.comments}</h3>
+    <script
+      is:inline
+      src="https://giscus.app/client.js"
+      data-repo={repo}
+      data-repo-id={repoId}
+      data-category={category}
+      data-category-id={categoryId}
+      data-mapping="pathname"
+      data-strict="0"
+      data-reactions-enabled="1"
+      data-emit-metadata="0"
+      data-input-position="top"
+      data-theme="light"
+      data-lang={giscusLang}
+      data-loading="lazy"
+      crossorigin="anonymous"
+      async
+    ></script>
+  </section>
+)}
+
+<style>
+  .gc-wrap {
+    max-width: 880px;
+    margin: 48px auto 0;
+    padding: 0 24px;
+  }
+  .gc-h {
+    font-family: var(--fh); font-size: 18px; font-weight: 800;
+    letter-spacing: -.01em; margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 2px dashed var(--text);
+  }
+  @media (max-width: 600px) {
+    .gc-wrap { padding: 0 12px; }
+  }
+</style>
