@@ -1,0 +1,20 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import BlogList from '../../../components/BlogList.astro';
+
+export async function getStaticPaths() {
+  const en = await getCollection('blogEn', ({ data }) => !data.draft || import.meta.env.DEV);
+  const zh = await getCollection('blogZh', ({ data }) => !data.draft || import.meta.env.DEV);
+  const zhSlugs = new Set(zh.map((p) => p.id));
+  const visible = en.filter((p) => zhSlugs.has(p.id));
+  const tagSet = new Set<string>();
+  visible.forEach((p) => p.data.tags.forEach((t) => tagSet.add(t)));
+  return Array.from(tagSet).map((tag) => ({ params: { tag }, props: { tag } }));
+}
+
+const { tag } = Astro.props;
+---
+<BaseLayout lang="en">
+  <BlogList lang="en" tagFilter={tag} />
+</BaseLayout>
