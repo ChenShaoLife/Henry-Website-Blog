@@ -1,0 +1,35 @@
+  ---
+import { getCollection, render } from 'astro:content';
+import BlogPost from '../../layouts/BlogPost.astro';
+
+export async function getStaticPaths() {
+  const en = await getCollection('blogEn', ({ data }) => !data.draft || import.meta.env.DEV);
+  const zh = await getCollection('blogZh', ({ data }) => !data.draft || import.meta.env.DEV);
+  const zhSlugs = new Set(zh.map((p) => p.id));
+  const visible = en.filter((p) => zhSlugs.has(p.id));
+  visible.sort((a, b) => b.data.pubDate.getTime() - a.data.pubDate.getTime());
+  return visible.map((post, i) => {
+    const next = i > 0 ? { id: visible[i - 1].id, title: visible[i - 1].data.title } : null;
+    const prev = i < visible.length - 1 ? { id: visible[i + 1].id, title: visible[i + 1].data.title } : null;
+    return { params: { slug: post.id }, props: { post, prev, next } };
+  });
+}
+
+const { post, prev, next } = Astro.props;
+const { Content } = await render(post);
+const readingTime = Math.max(1, Math.ceil(post.body.trim().split(/\s+/).length / 200));
+---
+<BlogPost
+  lang="en"
+  currentId={post.id}
+  readingTime={readingTime}
+  title={post.data.title}
+  description={post.data.description}
+  pubDate={post.data.pubDate}
+  tags={post.data.tags}
+  cover={post.data.cover}
+  prev={prev}
+  next={next}
+>
+  <Content />
+</BlogPost>
