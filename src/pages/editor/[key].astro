@@ -1,0 +1,1477 @@
+---
+import '../../styles/global.css';
+import { getCollection } from 'astro:content';
+import fs from 'node:fs';
+import path from 'node:path';
+
+export async function getStaticPaths() {
+  const keys: string[] = [];
+  if (import.meta.env.DEV) keys.push('dev');
+  const customKey = import.meta.env.EDITOR_KEY;
+  if (customKey && customKey !== 'dev' && customKey !== 'change-me-to-something-long-and-random') {
+    keys.push(customKey);
+  }
+
+  const posts = await getCollection('blogZh').catch(() => []);
+  const tagSet = new Set<string>();
+  posts.forEach((p) => p.data.tags.forEach((t) => tagSet.add(t)));
+  ['AI', 'Claude Code', '科技', '教程', '工具', '思考', '编程', 'Vibe Coding', '指南', '博客'].forEach((t) => tagSet.add(t));
+  const presetTags = Array.from(tagSet).sort();
+
+  const imagesDir = path.join(process.cwd(), 'public', 'images');
+  const imageFiles = fs.existsSync(imagesDir)
+    ? fs.readdirSync(imagesDir).filter((f) => /\.(png|jpe?g|webp|gif|svg)$/i.test(f)).sort()
+    : [];
+
+  return keys.map((key) => ({ params: { key }, props: { presetTags, imageFiles } }));
+}
+
+const { presetTags, imageFiles } = Astro.props as { presetTags: string[]; imageFiles: string[] };
+
+const emojiGroups = [
+  { label: '常用', items: ['😊','😂','🤔','😅','🥲','😎','🤯','😴','🙃','😇','🤩','🥰','😤','😭','🤗','🤨'] },
+  { label: '手势', items: ['👍','👎','👏','🙌','🤝','🙏','✋','✊','👀','💪','🫶','🤙','✌️','👋','🤘','🫡'] },
+  { label: '科技', items: ['🚀','💻','🤖','🧠','💡','⚡','🔥','✨','🎯','📊','📈','🛠️','⚙️','🔧','🧪','🔭'] },
+  { label: '符号', items: ['✅','❌','⚠️','⭐','💯','🆗','🎉','🎁','❤️','💔','🟢','🔴','🟡','🟦','▶️','◀️'] },
+  { label: '物品', items: ['📝','📖','📚','✏️','🔍','🔑','📌','📎','💾','📦','🎬','🎨','📷','🎥','📱','🖥️'] },
+  { label: '其他', items: ['☕','🍵','🌟','🌈','🌙','☀️','🌍','⏰','🎵','🎮','🏆','🎓','💼','🚦','🏠','🌱'] },
+];
+---
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>Editor — Henry</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style is:global>
+    html, body { height: 100%; }
+    body { background: var(--bg); overflow: hidden; min-height: 100vh; display: block; }
+
+    .ed-app { display: flex; flex-direction: column; height: 100vh; overflow: hidden; padding: 16px; gap: 16px; }
+
+    /* ── Top bar ── */
+    .ed-bar {
+      flex-shrink: 0;
+      background: var(--surface); border: var(--bd); border-radius: 16px; box-shadow: var(--sh);
+      padding: 12px 20px;
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 16px; position: relative;
+    }
+    .ed-bar-l, .ed-bar-r { display: flex; align-items: center; gap: 12px; min-width: 0; }
+    .ed-brand { font-family: var(--fh); font-size: 16px; font-weight: 800; letter-spacing: -.02em; }
+    .ed-pill {
+      font-family: var(--fh); font-size: 10px; font-weight: 700;
+      padding: 4px 10px; letter-spacing: .12em; text-transform: uppercase;
+      background: var(--yellow); border: 1.5px solid var(--text); border-radius: 999px;
+    }
+    .ed-drafts-btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-family: var(--fh); font-size: 12px; font-weight: 700;
+      padding: 6px 12px; border-radius: 999px;
+      border: 1.5px solid var(--text); background: var(--surface);
+      box-shadow: 2px 2px 0 var(--text); cursor: pointer;
+      max-width: 240px;
+      transition: transform .12s, box-shadow .12s;
+    }
+    .ed-drafts-btn:hover { transform: translate(-1px,-1px); box-shadow: 3px 3px 0 var(--text); }
+    .ed-drafts-btn .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 160px; }
+    .ed-drafts-btn .chevron { font-size: 8px; opacity: .6; }
+    .ed-saved { font-family: var(--fh); font-size: 11px; font-weight: 600; color: var(--muted); letter-spacing: .04em; }
+    .ed-site-link {
+      font-family: var(--fh); font-size: 13px; font-weight: 700;
+      padding: 7px 16px; border-radius: 999px;
+      border: var(--bd); background: var(--surface); color: var(--text);
+      box-shadow: 2px 2px 0 var(--text);
+      transition: transform .15s, box-shadow .15s;
+      text-decoration: none;
+    }
+    .ed-site-link:hover { transform: translate(-1px,-1px); box-shadow: 3px 3px 0 var(--text); }
+    .ed-copy {
+      font-family: var(--fh); font-size: 13px; font-weight: 700;
+      padding: 9px 22px; border-radius: 999px;
+      border: var(--bd); background: var(--text); color: white;
+      box-shadow: var(--sh); cursor: pointer;
+      transition: transform .15s, box-shadow .15s;
+    }
+    .ed-copy:hover { transform: translate(-2px,-2px); box-shadow: var(--sh-lg); }
+    .ed-copy.ok { background: var(--green); color: var(--text); }
+
+    /* ── Main grid ── */
+    .ed-main {
+      flex: 1; min-height: 0;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 320px;
+      gap: 16px;
+      transition: grid-template-columns .25s var(--ease);
+    }
+    .ed-main.focus { grid-template-columns: minmax(0, 1fr) 0; }
+    .ed-main.focus .ed-side { display: none; }
+
+    .ed-edit {
+      background: var(--surface);
+      border: var(--bd); border-radius: 16px; box-shadow: var(--sh);
+      display: flex; flex-direction: column;
+      min-width: 0; min-height: 0; overflow: hidden;
+    }
+
+    .ed-titlebar {
+      padding: 22px 28px 18px;
+      border-bottom: 2px solid var(--text);
+      flex-shrink: 0;
+    }
+    .ed-input-title {
+      width: 100%; border: 0; outline: 0;
+      font-family: var(--fh); font-size: 30px; font-weight: 800;
+      letter-spacing: -.02em; color: var(--text);
+      padding: 2px 0; background: transparent;
+    }
+    .ed-input-title::placeholder { color: #BBB; }
+    .ed-slug-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 12px; }
+    .ed-slug-pill {
+      display: inline-flex; align-items: center; gap: 4px;
+      background: var(--bg);
+      border: 1.5px solid var(--text); border-radius: 8px;
+      padding: 4px 10px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px;
+    }
+    .ed-slug-prefix { color: var(--muted); }
+    .ed-input-slug {
+      border: 0; outline: 0;
+      font-family: inherit; font-size: inherit; font-weight: 600;
+      color: var(--text); background: transparent; min-width: 100px;
+    }
+    .ed-input-slug::placeholder { color: #BBB; }
+    .ed-copy-fn {
+      font-family: var(--fh); font-size: 10px; font-weight: 700;
+      padding: 3px 10px; border-radius: 999px;
+      border: 1.5px solid var(--text); background: var(--yellow); color: var(--text);
+      cursor: pointer; letter-spacing: .06em;
+    }
+    .ed-copy-fn:hover { transform: translate(-1px,-1px); }
+    .ed-copy-fn.ok { background: var(--green); }
+    .ed-slug-help {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 18px; height: 18px; border-radius: 50%;
+      border: 1.5px solid var(--text); background: var(--surface);
+      font-family: var(--fh); font-size: 10px; font-weight: 800;
+      cursor: help; color: var(--muted);
+    }
+    .ed-slug-help:hover { background: var(--blue); color: white; }
+    .ed-input-desc {
+      width: 100%; border: 0; outline: 0; margin-top: 14px;
+      font-family: var(--fb); font-size: 15px; color: var(--muted);
+      padding: 4px 0; background: transparent;
+    }
+    .ed-input-desc::placeholder { color: #CCC; }
+
+    /* ── Toolbar ── */
+    .ed-toolbar {
+      display: flex; align-items: center; gap: 3px;
+      padding: 10px 20px;
+      background: var(--bg);
+      border-bottom: 2px solid var(--text);
+      flex-shrink: 0; flex-wrap: wrap;
+    }
+    .ed-tb-btn {
+      background: var(--surface); border: 1.5px solid var(--text);
+      width: 34px; height: 34px;
+      display: inline-flex; align-items: center; justify-content: center;
+      cursor: pointer; border-radius: 6px;
+      color: var(--text); font-family: var(--fh); font-weight: 700; font-size: 13px;
+      transition: transform .12s, box-shadow .12s;
+      box-shadow: 2px 2px 0 var(--text);
+    }
+    .ed-tb-btn:hover { transform: translate(-1px,-1px); box-shadow: 3px 3px 0 var(--text); }
+    .ed-tb-btn:active { transform: translate(0,0); box-shadow: 1px 1px 0 var(--text); }
+    .ed-tb-btn.wide { width: auto; padding: 0 10px; gap: 4px; font-size: 11px; }
+    .ed-tb-sep { width: 1.5px; height: 22px; background: var(--text); margin: 0 6px; }
+    .ed-tb-spacer { flex: 1; }
+    .ed-mode-toggle {
+      display: inline-flex; align-items: center;
+      border: var(--bd); border-radius: 999px;
+      overflow: hidden; background: var(--surface);
+      box-shadow: 2px 2px 0 var(--text);
+    }
+    .ed-mode-btn {
+      padding: 6px 14px; border: 0; background: transparent;
+      font-family: var(--fh); font-size: 12px; font-weight: 700;
+      cursor: pointer; color: var(--muted);
+    }
+    .ed-mode-btn:hover { color: var(--text); }
+    .ed-mode-btn.on { background: var(--text); color: white; }
+
+    /* ── Body (flex, not grid — avoids column-collapse edge cases) ── */
+    .ed-body { flex: 1; min-height: 0; display: flex; gap: 0; }
+    .ed-ta-wrap { flex: 1; min-width: 0; display: flex; flex-direction: column; border-right: 2px solid var(--text); }
+    .ed-pv-wrap { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+    .ed-body.write .ed-pv-wrap { display: none; }
+    .ed-body.preview .ed-ta-wrap { display: none; }
+    .ed-body.write .ed-ta-wrap, .ed-body.preview .ed-ta-wrap { border-right: 0; }
+    #ed-body-ta {
+      flex: 1; min-height: 0;
+      border: 0; resize: none; outline: 0;
+      padding: 22px 28px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 14px; line-height: 1.7;
+      color: var(--text); background: var(--surface); width: 100%;
+    }
+    #ed-body-ta:focus { background: #FFFEF5; }
+
+    .ed-preview { flex: 1; min-height: 0; overflow-y: auto; padding: 32px 24px; background: var(--bg); scroll-behavior: auto; }
+    /* WYSIWYG: mirror BlogPost.astro layout */
+    .ed-pv-card {
+      max-width: 780px; margin: 0 auto;
+      background: var(--surface);
+      border: var(--bd); border-radius: 24px;
+      box-shadow: 8px 8px 0 #0A0A0A;
+      overflow: hidden;
+    }
+    .ed-pv-cover {
+      width: 100%; aspect-ratio: 16 / 9;
+      object-fit: cover; display: block;
+      border-bottom: 2px solid var(--text);
+    }
+    .ed-pv-cover[hidden] { display: none; }
+    .ed-pv-body { padding: 40px clamp(20px, 5vw, 56px) 56px; }
+    .ed-pv-head { margin-bottom: 32px; padding-bottom: 26px; border-bottom: 2px dashed #0A0A0A; }
+    .ed-pv-meta { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; font-family: var(--fh); font-size: 12px; font-weight: 600; color: var(--muted); letter-spacing: .04em; margin-bottom: 16px; }
+    .ed-pv-tags { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+    .ed-pv-tag {
+      display: inline-block; padding: 3px 10px;
+      border: 1.5px solid var(--text); border-radius: 999px;
+      font-size: 10px; background: var(--blue); color: #fff;
+      text-transform: uppercase; letter-spacing: .08em;
+      font-family: var(--fh); font-weight: 700;
+    }
+    .ed-pv-title { font-family: var(--fh); font-size: clamp(26px, 3.5vw, 40px); font-weight: 800; letter-spacing: -.02em; line-height: 1.15; margin-bottom: 12px; }
+    .ed-pv-desc { font-size: 15px; color: var(--muted); line-height: 1.6; }
+    .ed-rendered { font-family: var(--fb); font-size: 16px; line-height: 1.75; color: var(--text); }
+    .ed-rendered h2 { font-family: var(--fh); font-size: 26px; font-weight: 800; letter-spacing: -.01em; margin: 48px 0 16px; line-height: 1.25; }
+    .ed-rendered h3 { font-family: var(--fh); font-size: 20px; font-weight: 700; margin: 32px 0 12px; line-height: 1.3; }
+    .ed-rendered p { margin: 0 0 20px; }
+    .ed-rendered a { color: var(--text); text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 3px; text-decoration-color: var(--blue); }
+    .ed-rendered a:hover { text-decoration-color: var(--text); }
+    .ed-rendered strong { font-weight: 700; }
+    .ed-rendered em { font-style: italic; }
+    .ed-rendered code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .92em; background: #F3F3F3; border: 1px solid #DDD; padding: 1px 6px; border-radius: 4px; }
+    .ed-rendered pre { background: #0A0A0A; color: #F5F5F5; padding: 38px 24px 22px; border-radius: 12px; overflow-x: auto; margin: 24px 0; line-height: 1.6; font-size: 14px; position: relative; }
+    .ed-rendered pre code { background: transparent; border: 0; padding: 0; color: inherit; font-size: inherit; }
+    .ed-rendered .code-lang {
+      position: absolute; top: 10px; left: 14px;
+      font-family: var(--fh); font-size: 10px; font-weight: 700;
+      letter-spacing: .12em; text-transform: uppercase;
+      padding: 2px 8px; border-radius: 4px;
+      background: rgba(255,255,255,.08); color: rgba(255,255,255,.55);
+      pointer-events: none;
+    }
+    .ed-rendered .code-copy {
+      position: absolute; top: 8px; right: 10px;
+      display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+      height: 26px; padding: 0 10px;
+      border: 0; border-radius: 6px;
+      background: rgba(255,255,255,.1); color: rgba(255,255,255,.75);
+      cursor: pointer;
+      font-family: var(--fh); font-size: 11px; font-weight: 700;
+      letter-spacing: .04em;
+      opacity: 0; transition: opacity .15s, background .15s, color .15s;
+    }
+    .ed-rendered pre:hover .code-copy { opacity: 1; }
+    .ed-rendered .code-copy:hover { background: rgba(255,255,255,.22); color: white; }
+    .ed-rendered .code-copy.ok { background: var(--green); color: var(--text); opacity: 1; }
+    @media (hover: none) { .ed-rendered .code-copy { opacity: 1; } }
+    .ed-rendered blockquote { border-left: 4px solid var(--text); padding: 4px 0 4px 20px; margin: 24px 0; color: var(--muted); font-style: italic; }
+    .ed-rendered blockquote p { margin-bottom: 0; }
+    .ed-rendered ul, .ed-rendered ol { margin: 0 0 20px; padding-left: 26px; }
+    .ed-rendered li { margin-bottom: 6px; }
+    .ed-rendered img { max-width: 100%; height: auto; border: 2px solid var(--text); border-radius: 12px; margin: 24px auto; display: block; box-shadow: 4px 4px 0 #0A0A0A; }
+    .ed-rendered hr { border: 0; border-top: 2px dashed #0A0A0A; margin: 40px 0; }
+    .ed-rendered table { border-collapse: collapse; margin: 24px 0; width: 100%; }
+    .ed-rendered th, .ed-rendered td { border: 1.5px solid var(--text); padding: 10px 14px; }
+    .ed-rendered th { background: var(--blue); color: #fff; font-weight: 700; font-family: var(--fh); }
+    .ed-rendered .callout { display: flex; align-items: flex-start; gap: 12px; padding: 14px 18px; margin: 24px 0; border: 2px solid #0A0A0A; border-radius: 12px; box-shadow: 4px 4px 0 #0A0A0A; line-height: 1.6; font-style: normal; }
+    .ed-rendered .callout svg { flex-shrink: 0; margin-top: 2px; }
+    .ed-rendered .callout strong { font-weight: 800; }
+    .ed-rendered .callout-info    { background: var(--blue);   color: #fff; }
+    .ed-rendered .callout-warning { background: var(--yellow); color: #0A0A0A; }
+    .ed-rendered .callout-success { background: var(--green);  color: #0A0A0A; }
+    .ed-rendered .callout-danger  { background: var(--pink);   color: #0A0A0A; }
+    .ed-rendered .callout-info code { background: rgba(255,255,255,.2); border-color: rgba(255,255,255,.35); color: #fff; }
+    .ed-rendered .callout-warning code,
+    .ed-rendered .callout-success code,
+    .ed-rendered .callout-danger code  { background: rgba(0,0,0,.1); border-color: rgba(0,0,0,.15); }
+
+    .ed-status {
+      flex-shrink: 0; padding: 8px 22px; border-top: 2px solid var(--text); background: var(--bg);
+      display: flex; align-items: center; justify-content: space-between;
+      font-family: var(--fh); font-size: 11px; font-weight: 600; color: var(--muted); letter-spacing: .04em; gap: 16px;
+    }
+    .ed-stat { display: inline-flex; align-items: center; gap: 4px; }
+    .ed-stat b { color: var(--text); font-weight: 800; }
+    .ed-draft-flag { padding: 2px 9px; border: 1.5px solid var(--text); border-radius: 999px; background: var(--pink); color: var(--text); font-family: var(--fh); font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+
+    /* ── Sidebar ── */
+    .ed-side { display: flex; flex-direction: column; gap: 16px; min-height: 0; overflow-y: auto; }
+    .ed-card { background: var(--surface); border: var(--bd); border-radius: 14px; box-shadow: var(--sh); padding: 16px 18px; }
+    .ed-card-h { font-family: var(--fh); font-size: 11px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--text); margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+    .ed-card-h::before { content: ''; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--pink); border: 1.5px solid var(--text); }
+    .ed-side input[type="date"], .ed-side input[type="text"] { width: 100%; box-sizing: border-box; font-family: var(--fb); font-size: 13px; padding: 8px 12px; border: 1.5px solid var(--text); border-radius: 8px; background: var(--surface); color: var(--text); }
+    .ed-side input:focus { outline: 2px solid var(--blue); outline-offset: 1px; }
+    .ed-check-row { display: flex; align-items: center; gap: 10px; }
+    .ed-check-row input { width: 18px; height: 18px; accent-color: var(--text); cursor: pointer; }
+    .ed-check-row label { font-size: 14px; font-weight: 600; cursor: pointer; }
+    .ed-hint { font-size: 11px; color: var(--muted); margin-top: 8px; line-height: 1.5; }
+    .ed-tag-grid { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+    .ed-tag-chip { display: inline-flex; align-items: center; padding: 4px 12px; border-radius: 999px; border: 1.5px solid var(--text); background: var(--surface); font-family: var(--fh); font-size: 11px; font-weight: 600; cursor: pointer; transition: all .15s; user-select: none; }
+    .ed-tag-chip:hover { box-shadow: 2px 2px 0 var(--text); transform: translate(-1px,-1px); }
+    .ed-tag-chip.on { background: var(--yellow); font-weight: 700; box-shadow: 2px 2px 0 var(--text); }
+    .ed-tag-selected { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; min-height: 22px; }
+    .ed-tag-selected:empty { display: none; }
+    .ed-tag-sel { display: inline-flex; align-items: center; gap: 2px; padding: 3px 4px 3px 10px; border-radius: 999px; background: var(--yellow); border: 1.5px solid var(--text); font-family: var(--fh); font-size: 11px; font-weight: 700; }
+    .ed-tag-x { width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; cursor: pointer; font-size: 13px; line-height: 1; }
+    .ed-tag-x:hover { background: rgba(0,0,0,.12); }
+
+    /* ── Popovers ── */
+    .ed-pop {
+      position: absolute;
+      background: var(--surface); border: var(--bd); border-radius: 12px; box-shadow: var(--sh-lg);
+      padding: 14px; z-index: 100; display: none;
+    }
+    .ed-pop.show { display: block; }
+    .ed-pop-h { font-family: var(--fh); font-size: 11px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+
+    /* Link popover */
+    .ed-pop.link { min-width: 320px; }
+    .ed-pop.link .row { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
+    .ed-pop.link label { font-family: var(--fh); font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+    .ed-pop.link input { padding: 7px 10px; border: 1.5px solid var(--text); border-radius: 6px; font-size: 13px; outline: 0; }
+    .ed-pop.link input:focus { outline: 2px solid var(--blue); outline-offset: 1px; }
+    .ed-pop.link .actions { display: flex; gap: 8px; justify-content: flex-end; }
+    .ed-pop.link button { padding: 6px 14px; border: 1.5px solid var(--text); border-radius: 6px; background: var(--text); color: white; font-family: var(--fh); font-size: 12px; font-weight: 700; cursor: pointer; }
+    .ed-pop.link button.alt { background: var(--surface); color: var(--text); }
+
+    /* Image gallery popover */
+    .ed-pop.image { min-width: 480px; max-width: 560px; }
+    .ed-img-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; max-height: 340px; overflow-y: auto; margin-bottom: 12px; }
+    .ed-img-cell {
+      cursor: pointer; border: 1.5px solid var(--text); border-radius: 8px; overflow: hidden;
+      background: var(--bg); display: flex; flex-direction: column;
+      transition: transform .12s, box-shadow .12s;
+    }
+    .ed-img-cell:hover { transform: translate(-2px,-2px); box-shadow: 3px 3px 0 var(--text); }
+    .ed-img-cell img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; }
+    .ed-img-cell .name { font-family: ui-monospace, monospace; font-size: 10px; padding: 4px 6px; border-top: 1px solid #DDD; background: var(--surface); text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ed-img-empty { padding: 24px; text-align: center; color: var(--muted); font-size: 13px; }
+    .ed-img-custom { display: flex; gap: 6px; padding-top: 12px; border-top: 1.5px dashed #DDD; }
+    .ed-img-custom input { flex: 1; padding: 7px 10px; border: 1.5px solid var(--text); border-radius: 6px; font-family: ui-monospace, monospace; font-size: 12px; outline: 0; }
+    .ed-img-custom button { padding: 7px 14px; border: 1.5px solid var(--text); border-radius: 6px; background: var(--text); color: white; font-family: var(--fh); font-size: 12px; font-weight: 700; cursor: pointer; }
+
+    /* Emoji picker */
+    .ed-pop.emoji { width: 320px; max-height: 380px; overflow-y: auto; }
+    .ed-emoji-group { margin-bottom: 12px; }
+    .ed-emoji-group:last-child { margin-bottom: 0; }
+    .ed-emoji-label { font-family: var(--fh); font-size: 9px; font-weight: 800; letter-spacing: .15em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+    .ed-emoji-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px; }
+    .ed-emoji-btn { width: 100%; aspect-ratio: 1; background: transparent; border: 0; border-radius: 6px; font-size: 20px; cursor: pointer; transition: background .12s; padding: 0; line-height: 1; }
+    .ed-emoji-btn:hover { background: var(--bg); }
+
+    /* Drafts popover */
+    .ed-pop.drafts { min-width: 320px; max-width: 380px; left: 0; }
+    .ed-drafts-list { max-height: 320px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
+    .ed-draft-item {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 10px; border-radius: 8px; cursor: pointer;
+      transition: background .12s;
+      border: 1.5px solid transparent;
+    }
+    .ed-draft-item:hover { background: var(--bg); }
+    .ed-draft-item.cur { background: var(--bg); border-color: var(--text); }
+    .ed-draft-item .info { flex: 1; min-width: 0; }
+    .ed-draft-item .t { font-family: var(--fh); font-size: 13px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ed-draft-item .d { font-size: 10px; color: var(--muted); margin-top: 2px; font-family: var(--fh); letter-spacing: .04em; }
+    .ed-draft-item .del {
+      width: 24px; height: 24px; border: 0; background: transparent;
+      cursor: pointer; border-radius: 4px; opacity: .4;
+      display: inline-flex; align-items: center; justify-content: center;
+    }
+    .ed-draft-item .del:hover { opacity: 1; background: var(--pink); color: var(--text); }
+    .ed-drafts-new {
+      width: 100%; padding: 8px;
+      border: 1.5px dashed var(--text); border-radius: 8px;
+      background: var(--surface); cursor: pointer;
+      font-family: var(--fh); font-size: 12px; font-weight: 700;
+    }
+    .ed-drafts-new:hover { background: var(--yellow); }
+    .ed-drafts-actions { display: flex; gap: 6px; margin-top: 8px; }
+    .ed-drafts-actions button {
+      flex: 1; padding: 6px; border: 1.5px solid var(--text); border-radius: 6px;
+      background: var(--surface); cursor: pointer;
+      font-family: var(--fh); font-size: 11px; font-weight: 700;
+    }
+    .ed-drafts-actions button:hover { background: var(--bg); }
+    .ed-drafts-note {
+      font-size: 10.5px; color: var(--muted); line-height: 1.5;
+      margin-top: 10px; padding-top: 10px;
+      border-top: 1.5px dashed #DDD;
+    }
+
+    /* ── Modal ── */
+    .ed-modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 200; display: none; align-items: center; justify-content: center; padding: 20px; }
+    .ed-modal-bg.show { display: flex; }
+    .ed-modal { background: var(--surface); border: var(--bd); border-radius: 16px; box-shadow: var(--sh-lg); width: 100%; max-width: 600px; max-height: 80vh; display: flex; flex-direction: column; overflow: hidden; }
+    .ed-modal-h { padding: 18px 24px; border-bottom: 2px solid var(--text); display: flex; align-items: center; justify-content: space-between; }
+    .ed-modal-h h3 { font-family: var(--fh); font-size: 18px; font-weight: 800; }
+    .ed-modal-h .close { background: transparent; border: 0; cursor: pointer; font-size: 22px; padding: 4px 10px; border-radius: 6px; }
+    .ed-modal-h .close:hover { background: var(--bg); }
+    .ed-modal-body { padding: 20px 24px; flex: 1; min-height: 0; overflow-y: auto; }
+    .ed-modal-body textarea { width: 100%; min-height: 280px; resize: vertical; border: 1.5px solid var(--text); border-radius: 8px; padding: 12px; font-family: ui-monospace, monospace; font-size: 13px; outline: 0; box-sizing: border-box; }
+    .ed-modal-body textarea:focus { outline: 2px solid var(--blue); outline-offset: 1px; }
+    .ed-modal-body .hint { font-size: 12px; color: var(--muted); margin-top: 8px; line-height: 1.5; }
+    .ed-modal-f { padding: 14px 24px; border-top: 2px solid var(--text); display: flex; gap: 8px; justify-content: flex-end; }
+    .ed-modal-f button { padding: 8px 18px; border: 1.5px solid var(--text); border-radius: 999px; font-family: var(--fh); font-size: 13px; font-weight: 700; cursor: pointer; box-shadow: 2px 2px 0 var(--text); }
+    .ed-modal-f button.primary { background: var(--text); color: white; }
+    .ed-modal-f button.alt { background: var(--surface); }
+
+    .ed-toast { position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%) translateY(80px); background: var(--green); border: var(--bd); box-shadow: 4px 4px 0 #0A0A0A; border-radius: 999px; padding: 12px 28px; font-family: var(--fh); font-weight: 700; font-size: 14px; transition: transform .3s var(--ease); z-index: 999; }
+    .ed-toast.show { transform: translateX(-50%) translateY(0); }
+
+    @media (max-width: 960px) {
+      body { overflow: auto; }
+      .ed-app { height: auto; min-height: 100vh; padding: 12px; gap: 12px; }
+      .ed-main { grid-template-columns: 1fr; }
+      .ed-edit { min-height: 70vh; }
+      .ed-body { flex-direction: column; }
+      .ed-body.split .ed-pv-wrap { display: none; }
+      .ed-ta-wrap { border-right: 0; border-bottom: 2px solid var(--text); }
+      #ed-body-ta { min-height: 400px; }
+      .ed-bar { flex-wrap: wrap; gap: 8px; padding: 10px 14px; }
+      .ed-saved { display: none; }
+      .ed-pop.image { min-width: 280px; max-width: calc(100vw - 32px); }
+      .ed-img-grid { grid-template-columns: repeat(3, 1fr); }
+    }
+    @media (max-width: 600px) {
+      .ed-app { padding: 8px; gap: 8px; }
+      .ed-input-title { font-size: 22px; }
+      .ed-titlebar { padding: 16px 18px 12px; }
+      .ed-toolbar { padding: 8px 14px; }
+      .ed-tb-btn { width: 30px; height: 30px; }
+      .ed-tb-sep { margin: 0 4px; }
+      .ed-site-link, .ed-drafts-btn .name { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="ed-app">
+    <!-- ── Top bar ── -->
+    <div class="ed-bar">
+      <div class="ed-bar-l">
+        <span class="ed-brand">Henry's Editor</span>
+        <span class="ed-pill">Private</span>
+        <button class="ed-drafts-btn" id="ed-drafts-btn">
+          <span>📄</span>
+          <span class="name" id="ed-drafts-cur">未命名草稿</span>
+          <span class="chevron">▼</span>
+        </button>
+      </div>
+      <div class="ed-bar-r">
+        <span class="ed-saved" id="ed-saved"></span>
+        <a class="ed-site-link" href="/" target="_blank" rel="noopener">← 看网站</a>
+        <button class="ed-copy" id="ed-copy">复制完整 .md</button>
+      </div>
+    </div>
+
+    <!-- ── Main ── -->
+    <div class="ed-main" id="ed-mainArea">
+      <div class="ed-edit">
+        <!-- title -->
+        <div class="ed-titlebar">
+          <input type="text" class="ed-input-title" id="ed-title" placeholder="文章标题" />
+          <div class="ed-slug-row">
+            <span class="ed-slug-pill">
+              <span class="ed-slug-prefix">/zh/blog/</span>
+              <input type="text" class="ed-input-slug" id="ed-slug" placeholder="article-slug" />
+            </span>
+            <button class="ed-copy-fn" id="ed-copy-fn" title="复制文件名（去 GitHub 新建文件时粘贴）">
+              <span id="ed-fn-text">article-slug.md</span> 📋
+            </button>
+            <span class="ed-slug-help" title="slug 是 URL 路径段。比如 markdown-speedrun → 网址 /blog/markdown-speedrun。约定英文小写 + 短横线，发布后别改（改了链接就断了）">?</span>
+          </div>
+          <input type="text" class="ed-input-desc" id="ed-desc" placeholder="一句话描述" />
+        </div>
+
+        <!-- toolbar -->
+        <div class="ed-toolbar" id="ed-tb">
+          <button class="ed-tb-btn" data-act="bold"   title="加粗 (Ctrl+B)"  style="font-weight:900;">B</button>
+          <button class="ed-tb-btn" data-act="italic" title="斜体 (Ctrl+I)"  style="font-style:italic;">I</button>
+          <button class="ed-tb-btn" data-act="strike" title="删除线"         style="text-decoration:line-through;">S</button>
+          <span class="ed-tb-sep"></span>
+          <button class="ed-tb-btn" data-act="h2" title="二级标题">H2</button>
+          <button class="ed-tb-btn" data-act="h3" title="三级标题">H3</button>
+          <span class="ed-tb-sep"></span>
+          <button class="ed-tb-btn" data-act="link-popover" title="链接 (Ctrl+K)" id="ed-link-btn" aria-label="链接">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+          </button>
+          <button class="ed-tb-btn" data-act="image-popover" title="图片相册" id="ed-img-btn" aria-label="图片">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+          </button>
+          <button class="ed-tb-btn" data-act="table" title="表格" aria-label="表格">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="1"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
+          </button>
+          <button class="ed-tb-btn" data-act="emoji-popover" title="Emoji" id="ed-emoji-btn" aria-label="Emoji">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+          </button>
+          <button class="ed-tb-btn" data-act="quote" title="引用" aria-label="引用">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="2" y="4" width="3" height="16" rx="1.5"/><rect x="8" y="5" width="14" height="3" rx="1" opacity=".5"/><rect x="8" y="10.5" width="11" height="3" rx="1" opacity=".5"/><rect x="8" y="16" width="8" height="3" rx="1" opacity=".5"/></svg>
+          </button>
+          <span class="ed-tb-sep"></span>
+          <button class="ed-tb-btn" data-act="code" title="行内代码" aria-label="行内代码">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+          </button>
+          <button class="ed-tb-btn" data-act="codeblock" title="代码块" aria-label="代码块">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><polyline points="15 14 17 12 15 10"/><polyline points="9 10 7 12 9 14"/></svg>
+          </button>
+          <span class="ed-tb-sep"></span>
+          <button class="ed-tb-btn" data-act="ul" title="无序列表" aria-label="无序列表">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+          </button>
+          <button class="ed-tb-btn" data-act="ol" title="有序列表" style="font-size:11px;">1.</button>
+          <button class="ed-tb-btn" data-act="hr" title="分隔线" aria-label="分隔线">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="4" y1="12" x2="20" y2="12"/></svg>
+          </button>
+          <button class="ed-tb-btn" data-act="tasklist" title="任务列表" aria-label="任务列表">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+          </button>
+          <button class="ed-tb-btn" data-act="details" title="折叠区块" aria-label="折叠区块">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+          </button>
+          <span class="ed-tb-sep"></span>
+          <button class="ed-tb-btn" data-act="callout-info"    title="提示框（蓝）"  style="background:var(--blue);">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+          </button>
+          <button class="ed-tb-btn" data-act="callout-warning" title="注意框（黄）"  style="background:var(--yellow);">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#0A0A0A" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          </button>
+          <button class="ed-tb-btn" data-act="callout-success" title="成功框（绿）"  style="background:var(--green);">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#0A0A0A" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+          </button>
+          <button class="ed-tb-btn" data-act="callout-danger"  title="警告框（粉）"  style="background:var(--pink);">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#0A0A0A" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+          </button>
+
+          <span class="ed-tb-spacer"></span>
+
+          <button class="ed-tb-btn" data-act="import" title="从 .md 导入 frontmatter" aria-label="导入">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          </button>
+          <button class="ed-tb-btn" data-act="focus" title="专注模式" id="ed-focus-btn" aria-label="专注">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+          </button>
+          <span class="ed-tb-sep"></span>
+          <div class="ed-mode-toggle">
+            <button class="ed-mode-btn" data-mode="write">撰写</button>
+            <button class="ed-mode-btn on" data-mode="split">分屏</button>
+            <button class="ed-mode-btn" data-mode="preview">预览</button>
+          </div>
+        </div>
+
+        <!-- body -->
+        <div class="ed-body split" id="ed-body">
+          <div class="ed-ta-wrap">
+            <textarea id="ed-body-ta" spellcheck="false" placeholder="正文写在这里。
+
+## 二级标题
+
+段落正文，**加粗**，*斜体*，`行内代码`
+
+工具栏图片按钮 → 选已有图片或自填路径
+工具栏表格按钮 → 插入 markdown 表骨架
+工具栏 emoji 按钮 → 表情选择器
+"></textarea>
+          </div>
+          <div class="ed-pv-wrap">
+            <div class="ed-preview" id="ed-preview">
+              <article class="ed-pv-card">
+                <img class="ed-pv-cover" id="pv-cover" hidden alt="" />
+                <div class="ed-pv-body">
+                  <header class="ed-pv-head">
+                    <div class="ed-pv-meta">
+                      <time id="pv-date"></time>
+                      <span class="ed-pv-tags" id="pv-tags"></span>
+                    </div>
+                    <h1 class="ed-pv-title" id="pv-title">文章标题</h1>
+                    <p class="ed-pv-desc" id="pv-desc">描述</p>
+                  </header>
+                  <div class="ed-rendered" id="pv-body"></div>
+                </div>
+              </article>
+            </div>
+          </div>
+        </div>
+
+        <!-- status -->
+        <div class="ed-status">
+          <div style="display:flex;gap:16px;align-items:center;">
+            <span class="ed-stat">字数 <b id="ed-stat-chars">0</b></span>
+            <span class="ed-stat">词数 <b id="ed-stat-words">0</b></span>
+            <span class="ed-stat">阅读 <b id="ed-stat-read">0</b> 分钟</span>
+          </div>
+          <span class="ed-draft-flag" id="ed-draft-flag" style="display:none;">DRAFT</span>
+        </div>
+      </div>
+
+      <!-- Sidebar -->
+      <aside class="ed-side">
+        <div class="ed-card">
+          <div class="ed-card-h">发布日期</div>
+          <input type="date" id="ed-date" />
+        </div>
+        <div class="ed-card">
+          <div class="ed-card-h">状态</div>
+          <div class="ed-check-row">
+            <input type="checkbox" id="ed-draft" checked />
+            <label for="ed-draft">草稿（线上隐藏）</label>
+          </div>
+          <p class="ed-hint">勾上 = draft: true，准备发布时取消。</p>
+        </div>
+        <div class="ed-card">
+          <div class="ed-card-h">标签</div>
+          <div class="ed-tag-grid" id="ed-tag-grid">
+            {presetTags.map((t) => (<button type="button" class="ed-tag-chip" data-tag={t}>{t}</button>))}
+          </div>
+          <input type="text" id="ed-tag-input" placeholder="新标签 + 回车…" />
+          <div class="ed-tag-selected" id="ed-tag-selected"></div>
+        </div>
+        <div class="ed-card">
+          <div class="ed-card-h">封面图（可选）</div>
+          <input type="text" id="ed-cover" placeholder="/images/your-cover.png" />
+          <p class="ed-hint">📐 推荐 <b>1200×630</b> (16:9)，JPG / PNG / WebP，&lt; 300KB<br />📁 把图片放进 <code>public/images/</code> 后填 <code>/images/文件名</code><br />💡 也可点工具栏图片按钮从相册选</p>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <!-- ── Drafts popover ── -->
+  <div class="ed-pop drafts" id="ed-drafts-pop">
+    <div class="ed-pop-h">草稿列表</div>
+    <div class="ed-drafts-list" id="ed-drafts-list"></div>
+    <button class="ed-drafts-new" id="ed-drafts-new">+ 新建空白草稿</button>
+    <div class="ed-drafts-actions">
+      <button class="ed-drafts-export" id="ed-drafts-export" title="导出全部草稿为 JSON 文件">⬇ 导出备份</button>
+      <button class="ed-drafts-import" id="ed-drafts-import" title="从 JSON 备份恢复">⬆ 导入</button>
+    </div>
+    <p class="ed-drafts-note">💾 存在你这个浏览器的 localStorage。换浏览器/清缓存会丢，重要的写完就复制走或导出备份。</p>
+    <input type="file" id="ed-drafts-import-file" accept="application/json" style="display:none" />
+  </div>
+
+  <!-- ── Link popover ── -->
+  <div class="ed-pop link" id="ed-link-pop">
+    <div class="ed-pop-h">插入链接</div>
+    <div class="row">
+      <label for="ed-link-text">显示文字</label>
+      <input type="text" id="ed-link-text" placeholder="链接显示的文字" />
+    </div>
+    <div class="row">
+      <label for="ed-link-url">URL</label>
+      <input type="text" id="ed-link-url" placeholder="https://..." />
+    </div>
+    <div class="actions">
+      <button class="alt" id="ed-link-cancel">取消</button>
+      <button id="ed-link-insert">插入</button>
+    </div>
+  </div>
+
+  <!-- ── Image gallery popover ── -->
+  <div class="ed-pop image" id="ed-img-pop">
+    <div class="ed-pop-h">从 public/images 选（{imageFiles.length} 张）</div>
+    {imageFiles.length === 0 ? (
+      <div class="ed-img-empty">public/images/ 是空的。把图片放进去，刷新这页就能看到。</div>
+    ) : (
+      <div class="ed-img-grid">
+        {imageFiles.map((f) => (
+          <div class="ed-img-cell" data-img={`/images/${f}`}>
+            <img src={`/images/${f}`} alt={f} loading="lazy" />
+            <div class="name">{f}</div>
+          </div>
+        ))}
+      </div>
+    )}
+    <div class="ed-img-custom">
+      <input type="text" id="ed-img-input" placeholder="或填自定义路径 /images/xxx.png" />
+      <button id="ed-img-insert">插入</button>
+    </div>
+  </div>
+
+  <!-- ── Emoji popover ── -->
+  <div class="ed-pop emoji" id="ed-emoji-pop">
+    {emojiGroups.map((g) => (
+      <div class="ed-emoji-group">
+        <div class="ed-emoji-label">{g.label}</div>
+        <div class="ed-emoji-grid">
+          {g.items.map((e) => (<button type="button" class="ed-emoji-btn" data-emoji={e}>{e}</button>))}
+        </div>
+      </div>
+    ))}
+  </div>
+
+  <!-- ── Frontmatter import modal ── -->
+  <div class="ed-modal-bg" id="ed-import-bg">
+    <div class="ed-modal">
+      <div class="ed-modal-h">
+        <h3>导入 .md 文件</h3>
+        <button class="close" id="ed-import-close">×</button>
+      </div>
+      <div class="ed-modal-body">
+        <textarea id="ed-import-ta" placeholder={`粘贴完整 .md 内容到这里，例：\n---\ntitle: 我的文章\ndescription: 一句话\npubDate: 2026-05-28\ntags: [AI, 教程]\ndraft: false\n---\n\n正文从这里开始...`}></textarea>
+        <p class="hint">会解析 frontmatter 填到右侧表单，正文填到编辑区。会覆盖当前内容（建议先新建草稿再导入）。</p>
+      </div>
+      <div class="ed-modal-f">
+        <button class="alt" id="ed-import-cancel">取消</button>
+        <button class="primary" id="ed-import-do">导入</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="ed-toast" id="ed-toast">已复制 ✓</div>
+
+  <script type="module">
+    import { marked } from 'https://cdn.jsdelivr.net/npm/marked@13/+esm';
+    marked.setOptions({ breaks: false, gfm: true });
+
+    // ── Shiki (matches production article highlighting) ──
+    let highlighter = null;
+    let highlighterPromise = null;
+    const SHIKI_LANGS = ['javascript','typescript','python','html','css','json','bash','shell','markdown','jsx','tsx','yaml','sql','go','rust','astro','vue','svelte','sh','toml','xml','diff'];
+    async function getHighlighter() {
+      if (highlighter) return highlighter;
+      if (highlighterPromise) return highlighterPromise;
+      highlighterPromise = (async () => {
+        const shiki = await import('https://esm.sh/shiki@1.22.0');
+        highlighter = await shiki.createHighlighter({
+          themes: ['github-dark'],
+          langs: SHIKI_LANGS,
+        });
+        return highlighter;
+      })();
+      return highlighterPromise;
+    }
+    // Preload in background
+    getHighlighter().catch(() => {});
+
+    const COPY_ICON = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+    const OK_ICON = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+
+    async function enhanceCodeBlocks() {
+      const blocks = document.querySelectorAll('#pv-body pre');
+      if (!blocks.length) return;
+      let hi = highlighter;
+      if (!hi) { try { hi = await getHighlighter(); } catch { hi = null; } }
+      blocks.forEach((pre) => {
+        if (pre.dataset.enhanced) return;
+        pre.dataset.enhanced = '1';
+
+        // Highlight if language is supported
+        const codeEl = pre.querySelector('code');
+        let lang = '';
+        if (codeEl) {
+          const m = (codeEl.className || '').match(/language-(\S+)/);
+          if (m) lang = m[1];
+        }
+        const text = codeEl ? codeEl.textContent || '' : pre.textContent || '';
+        if (hi && lang && hi.getLoadedLanguages().includes(lang)) {
+          try {
+            const html = hi.codeToHtml(text, { lang, theme: 'github-dark' });
+            const tmp = document.createElement('div');
+            tmp.innerHTML = html;
+            const newPre = tmp.querySelector('pre');
+            if (newPre) {
+              pre.setAttribute('style', newPre.getAttribute('style') || '');
+              pre.className = newPre.className;
+              pre.innerHTML = newPre.innerHTML;
+              pre.dataset.enhanced = '1';
+              pre.dataset.language = lang;
+            }
+          } catch {}
+        }
+
+        // Language badge
+        if (lang) {
+          const badge = document.createElement('span');
+          badge.className = 'code-lang';
+          badge.textContent = lang;
+          pre.appendChild(badge);
+        }
+
+        // Copy button
+        const btn = document.createElement('button');
+        btn.className = 'code-copy';
+        btn.type = 'button';
+        btn.setAttribute('aria-label', 'Copy code');
+        btn.innerHTML = COPY_ICON + '<span>复制</span>';
+        btn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const codeNow = pre.querySelector('code');
+          const txt = codeNow ? codeNow.innerText : pre.innerText;
+          try {
+            await navigator.clipboard.writeText(txt);
+            btn.classList.add('ok');
+            btn.innerHTML = OK_ICON + '<span>已复制</span>';
+            setTimeout(() => { btn.classList.remove('ok'); btn.innerHTML = COPY_ICON + '<span>复制</span>'; }, 1500);
+          } catch {}
+        });
+        pre.appendChild(btn);
+      });
+    }
+
+    let enhanceTimer;
+    function scheduleEnhance() {
+      clearTimeout(enhanceTimer);
+      enhanceTimer = setTimeout(enhanceCodeBlocks, 180);
+    }
+
+    const $ = (id) => document.getElementById(id);
+
+    // ── Element refs ──
+    const els = {
+      title: $('ed-title'), slug: $('ed-slug'), desc: $('ed-desc'),
+      date: $('ed-date'), draft: $('ed-draft'), cover: $('ed-cover'),
+      ta: $('ed-body-ta'), body: $('ed-body'),
+      tagGrid: $('ed-tag-grid'), tagInput: $('ed-tag-input'), tagSelected: $('ed-tag-selected'),
+      pvTitle: $('pv-title'), pvDesc: $('pv-desc'), pvDate: $('pv-date'), pvTags: $('pv-tags'), pvBody: $('pv-body'), pvCover: $('pv-cover'),
+      preview: $('ed-preview'),
+      copyBtn: $('ed-copy'), toast: $('ed-toast'), saved: $('ed-saved'),
+      copyFn: $('ed-copy-fn'), fnText: $('ed-fn-text'),
+      statChars: $('ed-stat-chars'), statWords: $('ed-stat-words'), statRead: $('ed-stat-read'),
+      draftFlag: $('ed-draft-flag'),
+      mainArea: $('ed-mainArea'), focusBtn: $('ed-focus-btn'),
+      tb: $('ed-tb'),
+      // Drafts
+      draftsBtn: $('ed-drafts-btn'), draftsCur: $('ed-drafts-cur'),
+      draftsPop: $('ed-drafts-pop'), draftsList: $('ed-drafts-list'), draftsNew: $('ed-drafts-new'),
+      // Link
+      linkBtn: $('ed-link-btn'), linkPop: $('ed-link-pop'),
+      linkText: $('ed-link-text'), linkUrl: $('ed-link-url'),
+      linkInsert: $('ed-link-insert'), linkCancel: $('ed-link-cancel'),
+      // Image
+      imgBtn: $('ed-img-btn'), imgPop: $('ed-img-pop'),
+      imgInput: $('ed-img-input'), imgInsert: $('ed-img-insert'),
+      // Emoji
+      emojiBtn: $('ed-emoji-btn'), emojiPop: $('ed-emoji-pop'),
+      // Import modal
+      importBg: $('ed-import-bg'), importTa: $('ed-import-ta'),
+      importClose: $('ed-import-close'), importCancel: $('ed-import-cancel'), importDo: $('ed-import-do'),
+    };
+
+    // ── State ──
+    let tags = new Set();
+    let savedSel = null;
+
+    // ── Multi-draft storage ──
+    const STORE = 'henry-editor-store-v3';
+    const LEGACY = 'henry-editor-draft-v2';
+
+    function newId() { return 'd_' + Math.random().toString(36).slice(2, 10); }
+    function emptyDraft() {
+      return {
+        id: newId(), title: '', desc: '', slug: '',
+        date: new Date().toISOString().slice(0,10),
+        tags: [], cover: '', draft: true, body: '',
+        updatedAt: Date.now(),
+      };
+    }
+    function loadStore() {
+      try {
+        const raw = localStorage.getItem(STORE);
+        if (raw) return JSON.parse(raw);
+        // migrate from v2
+        const legacy = localStorage.getItem(LEGACY);
+        if (legacy) {
+          const d = JSON.parse(legacy);
+          const draft = { ...emptyDraft(), ...d, tags: Array.isArray(d.tags) ? d.tags : [], id: newId(), updatedAt: Date.now() };
+          return { drafts: [draft], currentId: draft.id };
+        }
+      } catch {}
+      const d = emptyDraft();
+      return { drafts: [d], currentId: d.id };
+    }
+    function saveStore() {
+      try { localStorage.setItem(STORE, JSON.stringify(store)); } catch {}
+      flashSaved();
+    }
+    let store = loadStore();
+    if (!store.drafts.length) { const d = emptyDraft(); store = { drafts: [d], currentId: d.id }; }
+    if (!store.currentId || !store.drafts.find((d) => d.id === store.currentId)) {
+      store.currentId = store.drafts[0].id;
+    }
+
+    function currentDraft() { return store.drafts.find((d) => d.id === store.currentId); }
+    function commitToCurrent() {
+      const d = currentDraft();
+      if (!d) return;
+      d.title = els.title.value;
+      d.desc = els.desc.value;
+      d.slug = els.slug.value;
+      d.date = els.date.value;
+      d.cover = els.cover.value;
+      d.draft = els.draft.checked;
+      d.body = els.ta.value;
+      d.tags = Array.from(tags);
+      d.updatedAt = Date.now();
+    }
+    function loadFromCurrent() {
+      const d = currentDraft();
+      if (!d) return;
+      els.title.value = d.title || '';
+      els.desc.value = d.desc || '';
+      els.slug.value = d.slug || '';
+      els.date.value = d.date || new Date().toISOString().slice(0,10);
+      els.cover.value = d.cover || '';
+      els.draft.checked = d.draft !== false;
+      els.ta.value = d.body || '';
+      tags = new Set(d.tags || []);
+      syncTagChips();
+      render();
+      updateDraftsBtn();
+    }
+
+    function updateDraftsBtn() {
+      const d = currentDraft();
+      els.draftsCur.textContent = (d && d.title) ? d.title : '未命名草稿';
+    }
+    function renderDraftsList() {
+      els.draftsList.innerHTML = '';
+      [...store.drafts].sort((a, b) => b.updatedAt - a.updatedAt).forEach((d) => {
+        const item = document.createElement('div');
+        item.className = 'ed-draft-item' + (d.id === store.currentId ? ' cur' : '');
+        const time = new Date(d.updatedAt).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+        item.innerHTML = `
+          <div class="info">
+            <div class="t">${escapeHtml(d.title || '未命名草稿')}</div>
+            <div class="d">${time}${d.draft ? ' · 草稿' : ' · 已发布'}</div>
+          </div>
+          <button class="del" title="删除" aria-label="删除">🗑</button>
+        `;
+        item.addEventListener('click', (e) => {
+          if (e.target.closest('.del')) return;
+          if (d.id === store.currentId) { els.draftsPop.classList.remove('show'); return; }
+          commitToCurrent();
+          saveStore();
+          store.currentId = d.id;
+          loadFromCurrent();
+          renderDraftsList();
+          saveStore();
+          els.draftsPop.classList.remove('show');
+        });
+        item.querySelector('.del').addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (!confirm(`确定删除"${d.title || '未命名草稿'}"？此操作不可恢复。`)) return;
+          store.drafts = store.drafts.filter((x) => x.id !== d.id);
+          if (store.drafts.length === 0) store.drafts.push(emptyDraft());
+          if (store.currentId === d.id) {
+            store.currentId = store.drafts[0].id;
+            loadFromCurrent();
+          }
+          renderDraftsList();
+          saveStore();
+        });
+        els.draftsList.appendChild(item);
+      });
+    }
+    els.draftsBtn.addEventListener('click', () => {
+      const isOpen = els.draftsPop.classList.contains('show');
+      if (isOpen) { els.draftsPop.classList.remove('show'); return; }
+      const rect = els.draftsBtn.getBoundingClientRect();
+      els.draftsPop.style.top = (rect.bottom + window.scrollY + 6) + 'px';
+      els.draftsPop.style.left = (rect.left + window.scrollX) + 'px';
+      renderDraftsList();
+      els.draftsPop.classList.add('show');
+    });
+    els.draftsNew.addEventListener('click', () => {
+      commitToCurrent();
+      const d = emptyDraft();
+      store.drafts.push(d);
+      store.currentId = d.id;
+      loadFromCurrent();
+      saveStore();
+      els.draftsPop.classList.remove('show');
+    });
+
+    // Export drafts as JSON download
+    $('ed-drafts-export').addEventListener('click', () => {
+      commitToCurrent();
+      saveStore();
+      const blob = new Blob([JSON.stringify(store, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `henry-drafts-${new Date().toISOString().slice(0,10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast('草稿已导出 ✓');
+    });
+
+    // Import drafts from JSON file
+    const importFile = $('ed-drafts-import-file');
+    $('ed-drafts-import').addEventListener('click', () => importFile.click());
+    importFile.addEventListener('change', async (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      try {
+        const text = await file.text();
+        const parsed = JSON.parse(text);
+        if (!parsed.drafts || !Array.isArray(parsed.drafts)) throw new Error('格式错误');
+        if (!confirm(`将合并 ${parsed.drafts.length} 条草稿到现有 ${store.drafts.length} 条。继续？`)) return;
+        commitToCurrent();
+        const existingIds = new Set(store.drafts.map((d) => d.id));
+        parsed.drafts.forEach((d) => {
+          if (existingIds.has(d.id)) d.id = newId();
+          store.drafts.push(d);
+        });
+        saveStore();
+        renderDraftsList();
+        showToast(`已导入 ${parsed.drafts.length} 条草稿 ✓`);
+      } catch (err) {
+        alert('导入失败：' + err.message);
+      } finally {
+        importFile.value = '';
+      }
+    });
+
+    // ── Save & saved indicator ──
+    let savedTimer;
+    function flashSaved() {
+      const time = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+      els.saved.textContent = `已保存 · ${time}`;
+    }
+    function save() { commitToCurrent(); saveStore(); }
+    let saveDebounce;
+    function debouncedSave() { clearTimeout(saveDebounce); saveDebounce = setTimeout(save, 400); }
+
+    // ── Tags ──
+    function syncTagChips() {
+      els.tagGrid.querySelectorAll('.ed-tag-chip').forEach((chip) => {
+        chip.classList.toggle('on', tags.has(chip.dataset.tag));
+      });
+      els.tagSelected.innerHTML = Array.from(tags).map((t) => `
+        <span class="ed-tag-sel">${escapeHtml(t)}<span class="ed-tag-x" data-tag-remove="${escapeHtml(t)}">×</span></span>
+      `).join('');
+      els.tagSelected.querySelectorAll('[data-tag-remove]').forEach((x) => {
+        x.addEventListener('click', () => { tags.delete(x.dataset.tagRemove); syncTagChips(); render(); save(); });
+      });
+    }
+    els.tagGrid.querySelectorAll('.ed-tag-chip').forEach((chip) => {
+      chip.addEventListener('click', () => {
+        const t = chip.dataset.tag;
+        if (tags.has(t)) tags.delete(t); else tags.add(t);
+        syncTagChips(); render(); save();
+      });
+    });
+    els.tagInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ',') {
+        e.preventDefault();
+        const v = els.tagInput.value.trim();
+        if (v) { tags.add(v); els.tagInput.value = ''; syncTagChips(); render(); save(); }
+      }
+    });
+
+    // ── Toolbar actions ──
+    const actions = {
+      bold:      () => wrap('**', '**', '加粗'),
+      italic:    () => wrap('*', '*', '斜体'),
+      strike:    () => wrap('~~', '~~', '删除线'),
+      code:      () => wrap('`', '`', '代码'),
+      h2:        () => prefixLines('## '),
+      h3:        () => prefixLines('### '),
+      quote:     () => prefixLines('> '),
+      ul:        () => prefixLines('- '),
+      ol: () => {
+        const s = els.ta.selectionStart, e = els.ta.selectionEnd;
+        const val = els.ta.value;
+        const lineStart = val.lastIndexOf('\n', s - 1) + 1;
+        let lineEnd = val.indexOf('\n', e);
+        if (lineEnd === -1) lineEnd = val.length;
+        const lines = val.slice(lineStart, lineEnd).split('\n');
+        const isOl = lines.some((ln) => /^\d+\.\s/.test(ln));
+        let counter = 1;
+        const newLines = isOl
+          ? lines.map((ln) => ln.replace(/^\d+\.\s/, ''))
+          : lines.map((ln) => ln.trim() === '' ? ln : `${counter++}. ${ln}`);
+        const newBlock = newLines.join('\n');
+        els.ta.value = val.slice(0, lineStart) + newBlock + val.slice(lineEnd);
+        els.ta.focus();
+        els.ta.setSelectionRange(lineStart, lineStart + newBlock.length);
+        render(); debouncedSave();
+      },
+      codeblock: () => wrapBlock('```\n', '\n```'),
+      hr:        () => insertBlock('\n---\n'),
+      table:     () => insertBlock('\n| 列 1 | 列 2 | 列 3 |\n|------|------|------|\n| 值   | 值   | 值   |\n| 值   | 值   | 值   |\n'),
+      tasklist:  () => insertBlock('\n- [ ] 待办事项\n- [ ] 待办事项\n- [x] 已完成\n'),
+      details:   () => insertBlock('\n<details>\n<summary>点击展开</summary>\n\n折叠内容写这里\n\n</details>\n'),
+      'callout-info':    () => insertBlock('\n<div class="callout callout-info">\n  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>\n  <span><strong>提示：</strong>内容写这里</span>\n</div>\n'),
+      'callout-warning': () => insertBlock('\n<div class="callout callout-warning">\n  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>\n  <span><strong>注意：</strong>内容写这里</span>\n</div>\n'),
+      'callout-success': () => insertBlock('\n<div class="callout callout-success">\n  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>\n  <span><strong>成功：</strong>内容写这里</span>\n</div>\n'),
+      'callout-danger':  () => insertBlock('\n<div class="callout callout-danger">\n  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>\n  <span><strong>警告：</strong>内容写这里</span>\n</div>\n'),
+      'link-popover':  () => openLinkPop(),
+      'image-popover': () => togglePop(els.imgPop, els.imgBtn, () => els.imgInput.focus()),
+      'emoji-popover': () => togglePop(els.emojiPop, els.emojiBtn),
+      import:    () => { els.importTa.value = ''; els.importBg.classList.add('show'); els.importTa.focus(); },
+      focus:     () => { els.mainArea.classList.toggle('focus'); },
+    };
+
+    function wrap(before, after, placeholder) {
+      const s = els.ta.selectionStart, e = els.ta.selectionEnd;
+      const sel = els.ta.value.slice(s, e) || placeholder;
+      els.ta.value = els.ta.value.slice(0, s) + before + sel + after + els.ta.value.slice(e);
+      const newStart = s + before.length;
+      els.ta.focus();
+      els.ta.setSelectionRange(newStart, newStart + sel.length);
+      render(); debouncedSave();
+    }
+    function wrapBlock(before, after) {
+      const s = els.ta.selectionStart, e = els.ta.selectionEnd;
+      const sel = els.ta.value.slice(s, e) || 'code';
+      const val = els.ta.value;
+      const pre = s > 0 && val[s - 1] !== '\n' ? '\n' : '';
+      const post = e < val.length && val[e] !== '\n' ? '\n' : '';
+      els.ta.value = val.slice(0, s) + pre + before + sel + after + post + val.slice(e);
+      els.ta.focus();
+      const cursor = s + pre.length + before.length;
+      els.ta.setSelectionRange(cursor, cursor + sel.length);
+      render(); debouncedSave();
+    }
+    function prefixLines(prefix) {
+      const s = els.ta.selectionStart, e = els.ta.selectionEnd;
+      const val = els.ta.value;
+      const lineStart = val.lastIndexOf('\n', s - 1) + 1;
+      let lineEnd = val.indexOf('\n', e);
+      if (lineEnd === -1) lineEnd = val.length;
+      const block = val.slice(lineStart, lineEnd);
+      const newBlock = block.split('\n').map((ln) => prefix + ln).join('\n');
+      els.ta.value = val.slice(0, lineStart) + newBlock + val.slice(lineEnd);
+      els.ta.focus();
+      els.ta.setSelectionRange(lineStart, lineStart + newBlock.length);
+      render(); debouncedSave();
+    }
+    function insertBlock(text) {
+      const s = els.ta.selectionStart;
+      const val = els.ta.value;
+      const pre = s > 0 && val[s - 1] !== '\n' ? '\n' : '';
+      els.ta.value = val.slice(0, s) + pre + text + val.slice(s);
+      els.ta.focus();
+      const cursor = s + pre.length + text.length;
+      els.ta.setSelectionRange(cursor, cursor);
+      render(); debouncedSave();
+    }
+    function insertAtCursor(text) {
+      const s = els.ta.selectionStart;
+      els.ta.value = els.ta.value.slice(0, s) + text + els.ta.value.slice(s);
+      els.ta.focus();
+      els.ta.setSelectionRange(s + text.length, s + text.length);
+      render(); debouncedSave();
+    }
+
+    // ── Popover utils ──
+    function togglePop(pop, btn, onOpen) {
+      const isOpen = pop.classList.contains('show');
+      // close all
+      document.querySelectorAll('.ed-pop.show').forEach((p) => p.classList.remove('show'));
+      if (isOpen) return;
+      const rect = btn.getBoundingClientRect();
+      pop.style.top = (rect.bottom + window.scrollY + 6) + 'px';
+      pop.style.left = Math.max(8, rect.left + window.scrollX) + 'px';
+      pop.classList.add('show');
+      onOpen && onOpen();
+    }
+    document.addEventListener('click', (e) => {
+      document.querySelectorAll('.ed-pop.show').forEach((pop) => {
+        if (pop.contains(e.target)) return;
+        // find the button that opens this pop and skip if clicked on it
+        const trigger = pop.id === 'ed-link-pop' ? els.linkBtn
+                      : pop.id === 'ed-img-pop' ? els.imgBtn
+                      : pop.id === 'ed-emoji-pop' ? els.emojiBtn
+                      : pop.id === 'ed-drafts-pop' ? els.draftsBtn
+                      : null;
+        if (trigger && trigger.contains(e.target)) return;
+        pop.classList.remove('show');
+      });
+    });
+
+    // ── Link popover ──
+    function openLinkPop() {
+      // capture selection
+      const s = els.ta.selectionStart, e = els.ta.selectionEnd;
+      savedSel = { s, e };
+      const selText = els.ta.value.slice(s, e);
+      els.linkText.value = selText || '';
+      els.linkUrl.value = 'https://';
+      togglePop(els.linkPop, els.linkBtn, () => {
+        (selText ? els.linkUrl : els.linkText).focus();
+        if (selText === '') els.linkText.select();
+      });
+    }
+    els.linkInsert.addEventListener('click', () => {
+      const t = els.linkText.value.trim() || els.linkUrl.value;
+      const u = els.linkUrl.value.trim();
+      if (!u) return;
+      if (savedSel) { els.ta.setSelectionRange(savedSel.s, savedSel.e); }
+      const s = els.ta.selectionStart;
+      const md = `[${t}](${u})`;
+      els.ta.value = els.ta.value.slice(0, s) + md + els.ta.value.slice(els.ta.selectionEnd);
+      els.ta.focus();
+      const cur = s + md.length;
+      els.ta.setSelectionRange(cur, cur);
+      els.linkPop.classList.remove('show');
+      render(); debouncedSave();
+    });
+    els.linkCancel.addEventListener('click', () => els.linkPop.classList.remove('show'));
+    els.linkUrl.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); els.linkInsert.click(); } });
+    els.linkText.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); els.linkUrl.focus(); } });
+
+    // ── Image popover ──
+    document.querySelectorAll('#ed-img-pop [data-img]').forEach((cell) => {
+      cell.addEventListener('click', () => {
+        insertAtCursor(`![图片描述](${cell.dataset.img})`);
+        els.imgPop.classList.remove('show');
+      });
+    });
+    els.imgInsert.addEventListener('click', () => {
+      const v = els.imgInput.value.trim();
+      if (v) { insertAtCursor(`![图片描述](${v})`); els.imgInput.value = ''; els.imgPop.classList.remove('show'); }
+    });
+    els.imgInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); els.imgInsert.click(); } });
+
+    // ── Emoji popover ──
+    document.querySelectorAll('#ed-emoji-pop .ed-emoji-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        insertAtCursor(btn.dataset.emoji);
+        els.emojiPop.classList.remove('show');
+      });
+    });
+
+    // ── Import frontmatter ──
+    function parseFrontmatter(md) {
+      const m = md.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/);
+      if (!m) return null;
+      const yaml = m[1];
+      const body = m[2];
+      const fm = {};
+      yaml.split(/\r?\n/).forEach((line) => {
+        const kv = line.match(/^([a-zA-Z_][a-zA-Z0-9_]*):\s*(.*)$/);
+        if (!kv) return;
+        const key = kv[1];
+        let val = kv[2].trim();
+        if (key === 'tags') {
+          const arr = val.match(/^\[(.*)\]$/);
+          if (arr) {
+            fm.tags = arr[1].split(',').map((s) => s.trim().replace(/^["']|["']$/g, '')).filter(Boolean);
+          } else {
+            fm.tags = [];
+          }
+          return;
+        }
+        if (val.startsWith('"') && val.endsWith('"')) val = JSON.parse(val);
+        else if (val.startsWith("'") && val.endsWith("'")) val = val.slice(1, -1);
+        if (key === 'draft') val = val === 'true';
+        fm[key] = val;
+      });
+      return { fm, body };
+    }
+    els.importDo.addEventListener('click', () => {
+      const md = els.importTa.value.trim();
+      if (!md) { alert('请粘贴 .md 内容'); return; }
+      const parsed = parseFrontmatter(md);
+      if (!parsed) {
+        if (!confirm('未检测到 frontmatter。整段粘贴到正文？')) return;
+        els.ta.value = md;
+      } else {
+        const { fm, body } = parsed;
+        if (fm.title) els.title.value = fm.title;
+        if (fm.description) els.desc.value = fm.description;
+        if (fm.pubDate) els.date.value = String(fm.pubDate).slice(0, 10);
+        if (fm.cover) els.cover.value = fm.cover;
+        if (typeof fm.draft === 'boolean') els.draft.checked = fm.draft;
+        if (Array.isArray(fm.tags)) { tags = new Set(fm.tags); syncTagChips(); }
+        els.ta.value = body.trimStart();
+      }
+      els.importBg.classList.remove('show');
+      render(); save();
+      showToast('已导入 ✓');
+    });
+    els.importClose.addEventListener('click', () => els.importBg.classList.remove('show'));
+    els.importCancel.addEventListener('click', () => els.importBg.classList.remove('show'));
+    els.importBg.addEventListener('click', (e) => { if (e.target === els.importBg) els.importBg.classList.remove('show'); });
+
+    // ── Toolbar dispatch ──
+    els.tb.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-act]');
+      if (!btn) return;
+      const fn = actions[btn.dataset.act];
+      if (fn) fn();
+    });
+
+    // Keyboard shortcuts
+    els.ta.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey) {
+        if (e.key === 'b') { e.preventDefault(); actions.bold(); }
+        else if (e.key === 'i') { e.preventDefault(); actions.italic(); }
+        else if (e.key === 'k') { e.preventDefault(); actions['link-popover'](); }
+      }
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        const s = els.ta.selectionStart;
+        els.ta.value = els.ta.value.slice(0, s) + '  ' + els.ta.value.slice(s);
+        els.ta.setSelectionRange(s + 2, s + 2);
+        render(); debouncedSave();
+      }
+    });
+
+    // ── Mode toggle ──
+    document.querySelectorAll('.ed-mode-btn').forEach((b) => {
+      b.addEventListener('click', () => {
+        document.querySelectorAll('.ed-mode-btn').forEach((x) => x.classList.remove('on'));
+        b.classList.add('on');
+        els.body.className = 'ed-body ' + b.dataset.mode;
+        // re-render to ensure preview content fresh, scroll top
+        render();
+        els.preview.scrollTop = 0;
+      });
+    });
+
+    // ── Sync scroll (split mode only) ──
+    let scrollLock = false;
+    function syncFromTo(from, to) {
+      if (scrollLock) return;
+      scrollLock = true;
+      const fromMax = from.scrollHeight - from.clientHeight;
+      const toMax = to.scrollHeight - to.clientHeight;
+      if (fromMax > 0 && toMax > 0) {
+        const r = from.scrollTop / fromMax;
+        to.scrollTop = r * toMax;
+      }
+      requestAnimationFrame(() => { scrollLock = false; });
+    }
+    els.ta.addEventListener('scroll', () => {
+      if (!els.body.classList.contains('split')) return;
+      syncFromTo(els.ta, els.preview);
+    });
+    els.preview.addEventListener('scroll', () => {
+      if (!els.body.classList.contains('split')) return;
+      syncFromTo(els.preview, els.ta);
+    });
+
+    // ── Stats + filename + draft flag ──
+    function updateStats() {
+      const text = els.ta.value;
+      els.statChars.textContent = text.length;
+      const words = text.trim().match(/[一-龥]|[a-zA-Z]+|\d+/g) || [];
+      els.statWords.textContent = words.length;
+      els.statRead.textContent = Math.max(1, Math.ceil(words.length / 300));
+    }
+    function updateFilename() {
+      const slug = els.slug.value.trim() || 'article-slug';
+      els.fnText.textContent = slug + '.md';
+    }
+    function updateDraftFlag() {
+      els.draftFlag.style.display = els.draft.checked ? 'inline-block' : 'none';
+    }
+
+    // ── Render preview ──
+    function render() {
+      const title = els.title.value.trim() || '文章标题';
+      const desc = els.desc.value.trim() || '描述';
+      const dateStr = els.date.value || new Date().toISOString().slice(0,10);
+      const tagList = Array.from(tags);
+      const cover = els.cover.value.trim();
+      els.pvTitle.textContent = title;
+      els.pvDesc.textContent = desc;
+      els.pvDate.textContent = new Date(dateStr).toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' });
+      els.pvTags.innerHTML = tagList.map((t) => `<span class="ed-pv-tag">${escapeHtml(t)}</span>`).join('');
+      if (cover) { els.pvCover.src = cover; els.pvCover.hidden = false; }
+      else { els.pvCover.removeAttribute('src'); els.pvCover.hidden = true; }
+      els.pvBody.innerHTML = marked.parse(els.ta.value || '');
+      updateStats(); updateFilename(); updateDraftFlag(); updateDraftsBtn();
+      scheduleEnhance();
+    }
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+    function escapeYaml(s) {
+      if (/[:"'\[\]{}#&*!|>%@`]/.test(s) || s.startsWith(' ') || s.endsWith(' ') || s === '') {
+        return JSON.stringify(s);
+      }
+      return s;
+    }
+    function buildMarkdown() {
+      const tagList = Array.from(tags);
+      const lines = ['---'];
+      lines.push(`title: ${escapeYaml(els.title.value.trim() || 'Untitled')}`);
+      lines.push(`description: ${escapeYaml(els.desc.value.trim() || '')}`);
+      lines.push(`pubDate: ${els.date.value || new Date().toISOString().slice(0,10)}`);
+      lines.push(`tags: [${tagList.map(escapeYaml).join(', ')}]`);
+      if (els.cover.value.trim()) lines.push(`cover: ${escapeYaml(els.cover.value.trim())}`);
+      lines.push(`draft: ${els.draft.checked}`);
+      lines.push('---');
+      lines.push('');
+      lines.push(els.ta.value);
+      return lines.join('\n');
+    }
+
+    function showToast(text) {
+      els.toast.textContent = text;
+      els.toast.classList.add('show');
+      setTimeout(() => els.toast.classList.remove('show'), 1600);
+    }
+
+    async function copyMd() {
+      const md = buildMarkdown();
+      try {
+        await navigator.clipboard.writeText(md);
+        els.copyBtn.classList.add('ok');
+        els.copyBtn.textContent = '已复制 ✓';
+        showToast('已复制完整 .md ✓');
+        setTimeout(() => {
+          els.copyBtn.classList.remove('ok');
+          els.copyBtn.textContent = '复制完整 .md';
+        }, 1800);
+      } catch (e) {
+        alert('复制失败：\n\n' + md);
+      }
+    }
+    els.copyBtn.addEventListener('click', copyMd);
+
+    async function copyFilename() {
+      const fn = (els.slug.value.trim() || 'article-slug') + '.md';
+      try {
+        await navigator.clipboard.writeText(fn);
+        els.copyFn.classList.add('ok');
+        showToast(`已复制文件名: ${fn}`);
+        setTimeout(() => els.copyFn.classList.remove('ok'), 1500);
+      } catch {}
+    }
+    els.copyFn.addEventListener('click', copyFilename);
+
+    // ── Input bindings ──
+    function onChange() { render(); debouncedSave(); }
+    [els.title, els.slug, els.desc, els.date, els.cover, els.ta].forEach((el) => el.addEventListener('input', onChange));
+    els.draft.addEventListener('change', onChange);
+
+    // Slug auto-suggest
+    let slugTouched = false;
+    els.slug.addEventListener('input', () => { slugTouched = els.slug.value.length > 0; });
+    els.title.addEventListener('input', () => {
+      if (slugTouched) return;
+      const auto = els.title.value.trim().toLowerCase()
+        .replace(/[^\w一-龥\s-]/g, '').replace(/\s+/g, '-').slice(0, 60);
+      els.slug.value = auto;
+      updateFilename();
+    });
+
+    // ── Init ──
+    loadFromCurrent();
+    slugTouched = (els.slug.value || '').length > 0;
+  </script>
+</body>
+</html>
