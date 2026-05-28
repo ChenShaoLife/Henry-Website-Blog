@@ -1,0 +1,110 @@
+---
+import { getCollection } from 'astro:content';
+import { strings, type Lang } from '../i18n/strings';
+
+interface Props { lang: Lang; currentId: string; tags: string[]; }
+const { lang, currentId, tags } = Astro.props;
+const t = strings[lang];
+const urlBase = lang === 'en' ? '/blog' : '/zh/blog';
+const collection = lang === 'zh' ? 'blogZh' : 'blogEn';
+
+const all = await getCollection(collection, ({ data }) =>
+  import.meta.env.PROD ? !data.draft : true
+);
+const others = all.filter(p => p.id !== currentId);
+if (others.length === 0) return;
+
+type Scored = { id: string; title: string; description: string; cover?: string; score: number; };
+const scored: Scored[] = others.map(p => ({
+  id: p.id,
+  title: p.data.title,
+  description: p.data.description,
+  cover: p.data.cover,
+  score: p.data.tags.filter(tag => tags.includes(tag)).length,
+}));
+
+const hasMatch = scored.some(p => p.score > 0);
+const heading = hasMatch ? t.blog.related : t.blog.more;
+const picks = hasMatch
+  ? scored.filter(p => p.score > 0).sort((a, b) => b.score - a.score).slice(0, 3)
+  : others
+      .sort((a, b) => b.data.pubDate.getTime() - a.data.pubDate.getTime())
+      .slice(0, 3)
+      .map(p => ({ id: p.id, title: p.data.title, description: p.data.description, cover: p.data.cover, score: 0 }));
+---
+
+<section class="ra-wrap">
+  <div class="ra-head">
+    <span class="ra-eyebrow">{heading}</span>
+  </div>
+  <div class="ra-grid">
+    {picks.map(p => (
+      <a class="ra-card" href={`${urlBase}/${p.id}`}>
+        {p.cover && <img class="ra-cover" src={p.cover} alt={p.title} />}
+        {!p.cover && <div class="ra-cover-placeholder" />}
+        <div class="ra-body">
+          <p class="ra-title">{p.title}</p>
+          <p class="ra-desc">{p.description}</p>
+        </div>
+      </a>
+    ))}
+  </div>
+</section>
+
+<style>
+  .ra-wrap {
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 48px 24px 0;
+  }
+  .ra-head { margin-bottom: 20px; }
+  .ra-eyebrow {
+    font-family: var(--fh);
+    font-size: 11px; font-weight: 700;
+    letter-spacing: .1em; text-transform: uppercase;
+    color: var(--muted);
+  }
+  .ra-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+  }
+  .ra-card {
+    display: flex; flex-direction: column;
+    background: var(--surface);
+    border: var(--bd); border-radius: 16px;
+    box-shadow: var(--sh);
+    text-decoration: none; color: inherit;
+    overflow: hidden;
+    transition: transform .2s var(--ease), box-shadow .2s var(--ease);
+  }
+  .ra-card:hover { transform: translate(-2px,-2px); box-shadow: var(--sh-lg); }
+  .ra-cover {
+    width: 100%; aspect-ratio: 16 / 9;
+    object-fit: cover;
+    border-bottom: 2px solid var(--text);
+    display: block;
+  }
+  .ra-cover-placeholder {
+    width: 100%; aspect-ratio: 16 / 9;
+    background: var(--yellow);
+    border-bottom: 2px solid var(--text);
+  }
+  .ra-body { padding: 14px 16px 18px; flex: 1; display: flex; flex-direction: column; gap: 6px; }
+  .ra-title {
+    font-family: var(--fh);
+    font-size: 14px; font-weight: 700;
+    line-height: 1.35;
+    overflow: hidden; text-overflow: ellipsis;
+    display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical;
+  }
+  .ra-desc {
+    font-size: 12px; color: var(--muted); line-height: 1.5;
+    overflow: hidden; text-overflow: ellipsis;
+    display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical;
+  }
+  @media (max-width: 600px) {
+    .ra-wrap { padding: 36px 12px 0; }
+    .ra-grid { grid-template-columns: 1fr; }
+  }
+</style>

@@ -1,0 +1,30 @@
+---
+import { strings, videos, type Lang } from '../i18n/strings';
+interface Props { lang: Lang; }
+const { lang } = Astro.props;
+const t = strings[lang];
+---
+<section id="videos" class="section">
+  <div class="wrap">
+    <div class="sec-row rv">
+      <h2 class="sec-h" set:html={t.sections.videosHtml}></h2>
+      <div class="scroll-btns">
+        <button class="scroll-btn" id="videos-prev" aria-label={t.sections.prevAria}>←</button>
+        <button class="scroll-btn" id="videos-next" aria-label={t.sections.nextAria}>→</button>
+      </div>
+    </div>
+
+    <div class="h-scroll rv d1" id="videos-scroll">
+      {videos.map((v) => (
+        <article class="card v-card">
+          <div class="v-thumb">
+            <img src={v.img} alt={t.sections.videoAlt} loading="lazy"
+                 onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+            <div class="v-ph" style="background:#1a1a2e;display:none">THUMBNAIL</div>
+            <a href={v.url} class="v-link" target="_blank" rel="noopener">{t.sections.videoWatch}</a>
+          </div>
+        </article>
+      ))}
+    </div>
+  </div>
+</section>
