@@ -4,7 +4,7 @@ description: 一篇完整示例文章，演示 frontmatter 所有字段、全部
 pubDate: 2026-05-28
 tags: [指南, 博客, 教程]
 cover: /images/avatar3.png
-draft: true
+draft: false
 ---
 
 这是博客的**示例文章**，目的是 demo 全部支持的功能。下次写新文章时复制这个文件，改文件名、改 frontmatter、删掉这段说明，就能上手。
