@@ -95,7 +95,7 @@ const urlBase = lang === 'en' ? '/blog' : '/zh/blog';
   </div>
 
   {/* Share card modal */}
-  <div class="sc-bg" id="sc-bg">
+  <div class="sc-bg" id="sc-bg" role="dialog" aria-modal="true" aria-hidden="true" aria-label={t.blog.shareCard}>
     <div class="sc-modal">
       <canvas class="sc-canvas" id="sc-canvas"></canvas>
       <div class="sc-actions">
@@ -253,6 +253,7 @@ const urlBase = lang === 'en' ? '/blog' : '/zh/blog';
       function closeCard() {
         const bg = document.getElementById('sc-bg');
         bg?.classList.remove('open');
+        bg?.setAttribute('aria-hidden', 'true');
         document.body.style.overflow = '';
       }
 
@@ -266,17 +267,21 @@ const urlBase = lang === 'en' ? '/blog' : '/zh/blog';
         if (closeBtn) { closeBtn.textContent = lblClose; }
         if (!drawn) {
           drawing = true;
+          const cardBtn = document.getElementById('sh-card') as HTMLButtonElement;
           const origLabel = cardLabel?.textContent ?? '';
           if (cardLabel) cardLabel.textContent = isZh ? '生成中…' : 'Loading…';
+          if (cardBtn) cardBtn.disabled = true;
           try {
             await drawCard();
             drawn = true;
           } finally {
             drawing = false;
             if (cardLabel) cardLabel.textContent = origLabel;
+            if (cardBtn) cardBtn.disabled = false;
           }
         }
         bg?.classList.add('open');
+        bg?.setAttribute('aria-hidden', 'false');
         document.body.style.overflow = 'hidden';
       }
 
