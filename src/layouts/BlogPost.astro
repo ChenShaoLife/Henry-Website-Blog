@@ -11,7 +11,7 @@ interface Props {
   currentId: string;
   title: string;
   description: string;
-  pubDate: Dat
+  pubDate: Date;
   tags: string[];
   cover?: string;
   prev?: Adj | null;
@@ -69,7 +69,7 @@ const urlBase = lang === 'en' ? '/blog' : '/zh/blog';
     data-url={new URL(Astro.url.pathname, Astro.site ?? 'https://henry-website-seven.vercel.app').href}
     data-site={lang === 'zh' ? 'Henry 的博客' : "Henry's Blog"}
     data-site-url="henry-website-seven.vercel.app"
-    data-tags={tags.slice(0, 2).join(' · ')}
+    data-tags={tags.slice(0, 3).join(' · ')}
     data-author="Henry"
     data-scan={t.blog.shareCardScan}
     data-dl={t.blog.shareCardDl}
@@ -479,7 +479,7 @@ const urlBase = lang === 'en' ? '/blog' : '/zh/blog';
         ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
       }
 
-function wrapText(ctx: CanvasRenderingContext2D, text: string, maxW: number): string[] {
+      function wrapText(ctx: CanvasRenderingContext2D, text: string, maxW: number): string[] {
         const lines: string[] = [];
         let cur = '';
         for (const word of text.split(' ')) {
